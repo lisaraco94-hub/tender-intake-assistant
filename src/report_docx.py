@@ -44,7 +44,7 @@ def _add_colored_heading(doc: Document, text: str, level: int, color_hex: str):
     run.bold = True
     return p
 
-def build_docx(report: Dict[str, Any], out_path: str, primary_hex: str, accent_hex: str) -> bytes:
+def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> bytes:
     doc = Document()
 
     title = doc.add_paragraph()
