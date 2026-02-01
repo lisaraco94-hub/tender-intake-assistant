@@ -35,11 +35,16 @@ if pdf_file and st.button("Run Intake"):
     st.dataframe(report["risks"], use_container_width=True)
 
     out_name = "Tender_Intake_Report.docx"
-docx_bytes = build_docx(report, brand["primary_hex"], brand["accent_hex"])
+try:
+    docx_bytes = build_docx(report, brand["primary_hex"], brand["accent_hex"])
 
-st.download_button(
-    "Download Word report",
-    data=docx_bytes,
-    file_name=out_name,
-    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-)
+    st.download_button(
+        "Download Word report",
+        data=docx_bytes,
+        file_name="Tender_Intake_Report.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+except Exception:
+    st.warning("Report generated with partial information.")
+    st.stop()
