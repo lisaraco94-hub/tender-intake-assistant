@@ -1,4 +1,4 @@
-\
+/
 import json
 import streamlit as st
 from src.pipeline import read_pdf_pages, build_prebid_report
@@ -35,8 +35,11 @@ if pdf_file and st.button("Run Intake"):
     st.dataframe(report["risks"], use_container_width=True)
 
     out_name = "Tender_Intake_Report.docx"
-    out_path = f"/mnt/data/{out_name}"
-    build_docx(report, out_path, brand["primary_hex"], brand["accent_hex"])
+docx_bytes = build_docx(report, brand["primary_hex"], brand["accent_hex"])
 
-    with open(out_path, "rb") as f:
-        st.download_button("Download Word report", f, file_name=out_name, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+st.download_button(
+    "Download Word report",
+    data=docx_bytes,
+    file_name=out_name,
+    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)

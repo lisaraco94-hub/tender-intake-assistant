@@ -1,4 +1,4 @@
-\
+import io
 from __future__ import annotations
 import datetime
 from typing import Dict, Any, List, Tuple
@@ -44,7 +44,7 @@ def _add_colored_heading(doc: Document, text: str, level: int, color_hex: str):
     run.bold = True
     return p
 
-def build_docx(report: Dict[str, Any], out_path: str, primary_hex: str, accent_hex: str) -> str:
+def build_docx(report: Dict[str, Any], out_path: str, primary_hex: str, accent_hex: str) -> bytes:
     doc = Document()
 
     title = doc.add_paragraph()
@@ -125,5 +125,7 @@ def build_docx(report: Dict[str, Any], out_path: str, primary_hex: str, accent_h
     if gn.get("rationale"):
         doc.add_paragraph(str(gn["rationale"]))
 
-    doc.save(out_path)
-    return out_path
+    buf = io.BytesIO()
+doc.save(buf)
+buf.seek(0)
+return buf.getvalue()
