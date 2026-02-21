@@ -196,6 +196,11 @@ span.material-symbols-rounded {{
     background: {PRIMARY} !important;
 }}
 
+[data-testid="stMainBlockContainer"],
+.block-container {{
+    padding-top: 0 !important;
+}}
+
 section[data-testid="stSidebar"] {{
     background: {PRIMARY} !important;
 }}
@@ -207,11 +212,11 @@ section[data-testid="stSidebar"] {{
 /* ── Navbar ── */
 .top-nav {{
     background: transparent;
-    padding: 2.2rem 2.8rem 1.4rem;
+    padding: 0.9rem 2.8rem 0.5rem;
     display: flex;
     align-items: flex-start;
     justify-content: flex-start;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.4rem;
 }}
 .nav-logo-block {{
     display: flex;
@@ -230,7 +235,7 @@ section[data-testid="stSidebar"] {{
 /* ── Hero ── */
 .hero {{
     text-align: center;
-    padding: 1rem 2rem 2rem;
+    padding: 0.2rem 2rem 0.9rem;
 }}
 .hero-title {{
     font-size: 2.4rem;
@@ -253,9 +258,18 @@ section[data-testid="stSidebar"] {{
 }}
 
 /* ── Feature cards ── */
+[data-testid="stHorizontalBlock"] {{
+    align-items: stretch !important;
+}}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+    display: flex !important;
+    flex-direction: column !important;
+}}
 a.feat-link {{
     text-decoration: none;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     margin-bottom: 0.6rem;
 }}
 .feat-card {{
@@ -267,7 +281,7 @@ a.feat-link {{
     border: 2px solid transparent;
     position: relative;
     overflow: hidden;
-    min-height: 230px;
+    flex: 1;
     transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
 }}
 a.feat-link:hover .feat-card {{
@@ -335,69 +349,60 @@ a.feat-link:hover .feat-card {{
 }}
 
 /* ── Verdict banners ── */
-.verdict-go {{
-    background: linear-gradient(135deg, #e6f9f0, #d4f5e5);
-    border-left: 5px solid #27ae60;
+.verdict-go, .verdict-go-mit, .verdict-nogo {{
+    background: rgba(255,255,255,0.13);
     border-radius: 12px;
     padding: 1.2rem 1.8rem;
     margin-bottom: 1.2rem;
+    border-left-width: 5px;
+    border-left-style: solid;
 }}
-.verdict-go-mit {{
-    background: linear-gradient(135deg, #fff8e6, #fef0c7);
-    border-left: 5px solid {ORANGE};
-    border-radius: 12px;
-    padding: 1.2rem 1.8rem;
-    margin-bottom: 1.2rem;
-}}
-.verdict-nogo {{
-    background: linear-gradient(135deg, #fff0f0, #fde8e8);
-    border-left: 5px solid #e74c3c;
-    border-radius: 12px;
-    padding: 1.2rem 1.8rem;
-    margin-bottom: 1.2rem;
-}}
+.verdict-go     {{ border-left-color: #2ecc71; }}
+.verdict-go-mit {{ border-left-color: {ORANGE}; }}
+.verdict-nogo   {{ border-left-color: #e74c3c; }}
 .verdict-label {{
     font-size: 1.55rem;
     font-weight: 800;
+    color: white;
     letter-spacing: 0.05em;
 }}
 .verdict-score {{
     font-size: 0.85rem;
-    opacity: 0.72;
+    color: rgba(255,255,255,0.72);
     margin-top: 0.3rem;
 }}
 .verdict-rationale {{
     font-size: 0.85rem;
+    color: rgba(255,255,255,0.88);
     margin-top: 0.6rem;
-    opacity: 0.88;
     font-style: italic;
     line-height: 1.55;
 }}
 
 /* ── Showstopper card ── */
 .ss-card {{
-    background: #fff5f5;
-    border: 1.5px solid #e74c3c;
-    border-radius: 10px;
+    background: rgba(255,255,255,0.1);
+    border-left: 3px solid {ORANGE};
+    border-radius: 8px;
     padding: 0.9rem 1.15rem;
     margin-bottom: 0.6rem;
 }}
 .ss-id {{
     font-size: 0.7rem;
     font-weight: 700;
-    color: #c0392b;
+    color: {ORANGE};
     letter-spacing: 0.07em;
     text-transform: uppercase;
 }}
 .ss-desc {{
     font-size: 0.92rem;
     font-weight: 600;
-    color: #1a2d42;
+    color: white;
     margin: 0.25rem 0;
 }}
 .ss-evidence {{
     font-size: 0.78rem;
-    color: #666;
+    color: rgba(255,255,255,0.68);
     line-height: 1.5;
 }}
 
