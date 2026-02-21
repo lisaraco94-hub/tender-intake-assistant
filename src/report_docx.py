@@ -51,23 +51,55 @@ def _add_colored_heading(doc: Document, text: str, level: int, color_hex: str):
     return p
 
 
+def _set_run_font(run, name: str = "Montserrat", size_pt: int | None = None):
+    """Apply Montserrat (or fallback Calibri) to a run."""
+    run.font.name = name
+    if size_pt:
+        run.font.size = Pt(size_pt)
+    # Word theme-font override
+    from docx.oxml.ns import qn as _qn
+    from docx.oxml import OxmlElement as _el
+    rPr = run._r.get_or_add_rPr()
+    rFonts = rPr.find(_qn("w:rFonts"))
+    if rFonts is None:
+        rFonts = _el("w:rFonts")
+        rPr.insert(0, rFonts)
+    rFonts.set(_qn("w:ascii"),    name)
+    rFonts.set(_qn("w:hAnsi"),    name)
+    rFonts.set(_qn("w:cs"),       name)
+
+
 def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> bytes:
     doc = Document()
 
-    # Title
+    # Set default font to Montserrat for the whole document
+    from docx.oxml.ns import qn as _qn
+    from docx.oxml import OxmlElement as _el
+    style = doc.styles["Normal"]
+    style.font.name = "Montserrat"
+    rPr = style.element.get_or_add_rPr()
+    rFonts = _el("w:rFonts")
+    rFonts.set(_qn("w:ascii"), "Montserrat")
+    rFonts.set(_qn("w:hAnsi"), "Montserrat")
+    rPr.insert(0, rFonts)
+
+    # Cover block
     title = doc.add_paragraph()
-    r = title.add_run("Tender Intake Report (Pre-Bid)")
+    r = title.add_run("INPECO  ·  Tender Intake Report")
     r.bold = True
-    r.font.size = Pt(20)
+    r.font.size = Pt(22)
     r.font.color.rgb = RGBColor(*_hex_to_rgb(primary_hex))
+    _set_run_font(r, size_pt=22)
     title.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     subtitle = doc.add_paragraph()
-    r2 = subtitle.add_run(f"{report.get('tender_title','')} — {report.get('tender_date','')}")
+    r2 = subtitle.add_run(f"{report.get('tender_title', '')} — {report.get('tender_date', '')}")
     r2.italic = True
     r2.font.size = Pt(11)
+    _set_run_font(r2, size_pt=11)
 
-    doc.add_paragraph(f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    gen_p = doc.add_paragraph(f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    _set_run_font(gen_p.runs[0] if gen_p.runs else gen_p.add_run(""))
 
     # 1 Executive summary
     _add_colored_heading(doc, "1. Executive Summary", 1, primary_hex)
