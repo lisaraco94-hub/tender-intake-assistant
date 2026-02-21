@@ -43,8 +43,8 @@
       {
         "id": "SS-02",
         "name": "Required analyzer not in Inpeco connectivity portfolio",
-        "description": "The tender requires connection to one or more analyzers that Inpeco does not support and cannot develop within the project timeline.",
-        "signals": ["connection to [specific analyzer]", "integration with [specific analyzer]", "validated connection required at delivery", "analyzer connectivity certified"]
+        "description": "The tender requires mandatory connection to one or more analyzers that Inpeco does not support and cannot develop within the project timeline.",
+        "signals": ["connection to [specific analyzer]", "integration with [specific analyzer]", "validated connection required at delivery", "analyzer connectivity certified", "mandatory interface to", "must connect to"]
       },
       {
         "id": "SS-03",
@@ -69,15 +69,39 @@
         "name": "Geographic location outside service coverage",
         "description": "The installation site is in a country or region where Inpeco has no service infrastructure and cannot establish it within the project.",
         "signals": ["remote location", "country with no local service", "service within 4 hours required", "24/7 on-site service required"]
+      },
+      {
+        "id": "SS-07",
+        "name": "Bid submission deadline less than 3 weeks away",
+        "description": "The deadline to submit the bid is less than 3 weeks from now, making it technically or commercially impossible to prepare a compliant and competitive offer.",
+        "signals": ["submission deadline", "offer due date", "tender return date", "bid deadline", "response due", "offer submission by", "scadenza offerta", "Angebotsfrist", "délai de soumission"]
+      },
+      {
+        "id": "SS-08",
+        "name": "Pre-analytics only scope — no analyzer connectivity required",
+        "description": "The tender scope is limited exclusively to pre-analytical automation (centrifuge, decapping, aliquoting, sorting) with no connection to analytical instruments. This is not Total Lab Automation and significantly reduces the business case for Inpeco's FlexLab platform.",
+        "signals": ["pre-analytical only", "pre-analytics only", "no analyzer connection", "sorting only", "centrifuge only", "aliquoting only", "without analyzer integration", "senza collegamento analizzatori", "nur Präanalytik"]
+      },
+      {
+        "id": "SS-09",
+        "name": "No compressed air allowed on site",
+        "description": "The site prohibits or does not provide compressed air, which is required by Inpeco's FlexLab pneumatic transport system. Without compressed air the track cannot function.",
+        "signals": ["no compressed air", "compressed air not available", "aria compressa non disponibile", "keine Druckluft", "pas d'air comprimé", "oil-free environment", "compressed air prohibited", "pneumatic system not allowed"]
+      },
+      {
+        "id": "SS-10",
+        "name": "HIL detection and volume measurement via laser vision through tube labels",
+        "description": "The tender requires hemolysis/icterus/lipemia (HIL) detection and/or liquid level/volume measurement using laser vision technology capable of reading through tube labels. This capability is not part of Inpeco's current product portfolio.",
+        "signals": ["HIL detection", "hemolysis detection", "icterus detection", "lipemia detection", "laser vision", "volume detection through label", "read through label", "optical volume measurement", "vision through tube wall", "serum index detection on track"]
       }
     ],
 
     "high_risks": [
       {
         "id": "HR-01",
-        "name": "Brownfield installation — replacement during ongoing operations",
-        "description": "The laboratory must remain fully operational during the entire installation and cutover phase. Requires phased migration planning.",
-        "signals": ["ongoing operations", "no downtime", "replacement of existing system", "operational continuity", "phased installation", "running laboratory", "no interruption to testing"],
+        "name": "Brownfield installation — replacement during ongoing operations / no downtime",
+        "description": "The laboratory must remain fully operational with zero or minimal downtime during the entire installation and cutover phase. Requires phased migration planning, temporary workarounds, and close coordination with the lab.",
+        "signals": ["ongoing operations", "no downtime", "zero downtime", "replacement of existing system", "operational continuity", "phased installation", "running laboratory", "no interruption to testing", "lab must remain open", "continuità operativa", "senza interruzione"],
         "probability": 4,
         "impact": 5
       },
@@ -92,8 +116,8 @@
       {
         "id": "HR-03",
         "name": "Multi-floor or multi-building installation",
-        "description": "System must span multiple floors or buildings, requiring pneumatic transport or complex inter-floor sample routing not standard in FlexLab.",
-        "signals": ["multi-floor", "different floors", "inter-floor", "multi-building", "vertical transport", "pneumatic tube system", "cross-building"],
+        "description": "System must span multiple floors or buildings, requiring pneumatic transport or complex inter-floor sample routing not standard in FlexLab. Project complexity and cost escalate significantly.",
+        "signals": ["multi-floor", "different floors", "inter-floor", "multi-building", "vertical transport", "pneumatic tube system", "cross-building", "piano diverso", "piani multipli", "mehrere Etagen"],
         "probability": 3,
         "impact": 4
       },
@@ -108,8 +132,8 @@
       {
         "id": "HR-05",
         "name": "Extensive civil works required",
-        "description": "Significant structural modifications needed (floor reinforcement, new walls, electrical/HVAC upgrade) that fall within scope of responsibility.",
-        "signals": ["civil works", "construction", "floor reinforcement", "structural modification", "electrical upgrade", "HVAC", "building modification"],
+        "description": "Significant structural modifications needed (floor reinforcement, new walls, electrical/HVAC upgrade) that fall within scope of responsibility. Increases cost, timeline risk, and interface complexity with third parties.",
+        "signals": ["civil works", "construction", "floor reinforcement", "structural modification", "electrical upgrade", "HVAC", "building modification", "lavori edili", "opere civili", "Bauarbeiten"],
         "probability": 3,
         "impact": 4
       },
@@ -117,7 +141,7 @@
         "id": "HR-06",
         "name": "Aggressive penalty clauses (>5% contract value)",
         "description": "Liquidated damages or penalty clauses that could significantly exceed normal project risk tolerance.",
-        "signals": ["liquidated damages", "penalty", "penale", "Konventionalstrafe", "damages", "delay penalty", "SLA penalty", "performance bond"],
+        "signals": ["liquidated damages", "penalty", "penale", "Konventionalstrafe", "damages", "delay penalty", "SLA penalty", "performance bond", "penalities for delay", "malus"],
         "probability": 3,
         "impact": 4
       },
@@ -126,6 +150,14 @@
         "name": "LIS/middleware integration with non-standard system",
         "description": "Required integration with a hospital LIS, HIS or middleware that Inpeco has not previously interfaced, requiring new development.",
         "signals": ["LIS integration", "HIS connection", "middleware", "HL7", "ASTM", "FHIR", "hospital information system", "laboratory information system"],
+        "probability": 3,
+        "impact": 3
+      },
+      {
+        "id": "HR-08",
+        "name": "Dismantling and disposal of existing automation system in scope",
+        "description": "Inpeco is required to dismantle, remove, and/or dispose of the existing laboratory automation or pre-analytical equipment. This is typically out of scope and brings logistical, legal (WEEE), and cost risks.",
+        "signals": ["dismantling", "deinstallation", "disposal", "removal of existing", "demolition of existing system", "smontaggio", "smaltimento", "Demontage", "Entsorgung", "dépose", "démantèlement", "old system removal", "existing equipment disposal"],
         "probability": 3,
         "impact": 3
       }
@@ -143,16 +175,16 @@
       {
         "id": "MR-02",
         "name": "Specific regulatory / certification requirements",
-        "description": "Tender requires certifications or regulatory approvals beyond standard CE marking (e.g., country-specific IVD registration).",
-        "signals": ["FDA clearance", "local registration", "ministry approval", "national certification", "accreditation", "ISO 15189", "CAP accreditation"],
+        "description": "Tender requires certifications or regulatory approvals beyond standard CE marking (e.g., country-specific IVD registration, ISO 27001, security certifications).",
+        "signals": ["FDA clearance", "local registration", "ministry approval", "national certification", "accreditation", "ISO 15189", "CAP accreditation", "ISO 27001", "IEC 62443", "cybersecurity certification", "GDPR compliance certification", "data security certification"],
         "probability": 2,
         "impact": 3
       },
       {
         "id": "MR-03",
-        "name": "Biobank / long-term cold storage with high capacity",
-        "description": "Requirement for automated cold storage exceeding standard module capacity, requiring custom HVS solution.",
-        "signals": ["biobank", "long-term storage", "cold storage", "specimen archive", "storage capacity", "refrigerated archive", "sample repository"],
+        "name": "Biobank / automated cold storage connection",
+        "description": "Requirement for automated cold storage (biobank archiving, refrigerated module) exceeding standard module capacity, or requiring connection to an external biobank system.",
+        "signals": ["biobank", "long-term storage", "cold storage", "specimen archive", "storage capacity", "refrigerated archive", "sample repository", "biobank connection", "interfaccia biobank", "Biobankanbindung"],
         "probability": 2,
         "impact": 3
       },
@@ -174,11 +206,81 @@
       },
       {
         "id": "MR-06",
-        "name": "Very short warranty or non-standard maintenance terms",
-        "description": "Warranty period or service level requirements that differ significantly from Inpeco's standard terms.",
-        "signals": ["warranty", "maintenance", "service level", "uptime guarantee", "availability", "SLA", "response time", "spare parts"],
+        "name": "Non-standard or peculiar contract / warranty terms",
+        "description": "Contract includes warranty periods, SLA requirements, or commercial clauses that differ significantly from Inpeco's standard terms and may require legal review and negotiation.",
+        "signals": ["warranty", "maintenance", "service level", "uptime guarantee", "availability", "SLA", "response time", "spare parts", "peculiar contract", "non-standard terms", "unusual warranty", "warranty extension", "extended maintenance", "condizioni contrattuali", "Sonderkonditionen"],
         "probability": 2,
         "impact": 2
+      },
+      {
+        "id": "MR-07",
+        "name": "Tablets, PCs, furniture, or accessories out of Inpeco standard scope",
+        "description": "The tender requires supply of IT equipment (tablets, desktop PCs, monitors), laboratory furniture (benches, chairs, cabinets), or accessories not part of Inpeco's standard product catalog. Sourcing and warranty responsibility for such items must be clearly defined.",
+        "signals": ["tablet", "PC supply", "desktop computer", "monitor", "furniture", "laboratory bench", "cabinet", "chair", "accessories", "peripheral equipment", "fornitura arredi", "fornitura PC", "fornitura tablet", "Möbel", "Ausstattung", "mobilier"],
+        "probability": 2,
+        "impact": 2
+      },
+      {
+        "id": "MR-08",
+        "name": "Service documentation required in specific non-standard languages",
+        "description": "The tender requires service manuals, technical documentation, or user guides to be provided in a language not currently available in Inpeco's standard documentation package. Translation efforts add cost and timeline risk.",
+        "signals": ["service manual", "service documentation", "technical manual", "user guide", "manuale di servizio", "manuale tecnico", "in [specific language]", "dokumentation auf", "documentation en", "language requirements for documentation", "translated manuals"],
+        "probability": 2,
+        "impact": 2
+      },
+      {
+        "id": "MR-09",
+        "name": "IT security certifications required (ISO 27001, IEC 62443, etc.)",
+        "description": "The tender requires Inpeco or the supplied system to hold IT/cybersecurity certifications such as ISO 27001 or IEC 62443. These certifications may not be in place and obtaining them takes significant time and resources.",
+        "signals": ["ISO 27001", "IEC 62443", "cybersecurity", "information security certification", "data security", "IT security audit", "penetration test", "security assessment required", "TISAX", "SOC 2", "NIS2 compliance"],
+        "probability": 2,
+        "impact": 3
+      },
+      {
+        "id": "MR-10",
+        "name": "Rubber-capped tubes — compatibility risk with automated decapping/recapping",
+        "description": "The laboratory uses tubes with rubber/stopper caps (Vacutainer-style rubber stoppers) that may be incompatible with Inpeco's automated decapper/recapper modules, which are optimized for screw-cap or snap-cap tubes. Requires validation and may need manual workarounds.",
+        "signals": ["rubber cap", "rubber stopper", "rubber plug", "tappo in gomma", "tappo rubber", "Gummistopfen", "Vacutainer", "stopper tubes", "stoppered tubes", "capped tubes", "rubber-capped"],
+        "probability": 2,
+        "impact": 3
+      },
+      {
+        "id": "MR-11",
+        "name": "Physical servers to be supplied and managed by Inpeco",
+        "description": "The tender requires Inpeco to supply, install, and maintain physical on-premise servers for the automation software. Inpeco's standard offering uses embedded computing or customer-provided IT infrastructure. Server supply adds procurement, logistics, and long-term maintenance obligations.",
+        "signals": ["physical server", "server supply", "on-premise server", "dedicated server", "hardware server", "fornitura server", "serveur physique", "physischer Server", "rack server", "blade server", "server hardware included"],
+        "probability": 2,
+        "impact": 2
+      },
+      {
+        "id": "MR-12",
+        "name": "UPS (uninterruptible power supply) included in scope",
+        "description": "The tender requires Inpeco to supply and integrate an uninterruptible power supply (UPS) system for the automation. UPS supply is typically the responsibility of the hospital/customer facility team. Including it adds procurement, sizing, and maintenance obligations.",
+        "signals": ["UPS", "uninterruptible power supply", "gruppi di continuità", "continuità elettrica", "USV", "alimentation sans interruption", "battery backup", "power backup", "emergency power", "gruppo elettrogeno"],
+        "probability": 2,
+        "impact": 2
+      },
+      {
+        "id": "MR-13",
+        "name": "Ultra-cold storage (-20°C / -80°C) connected to the automation track",
+        "description": "The tender requires integration with or supply of ultra-cold freezer storage (-20°C or -80°C) connected to the automation track. This is beyond Inpeco's standard refrigerated archiver (+4°C to +10°C) and requires custom engineering or third-party integration.",
+        "signals": ["-20°C", "-80°C", "ultra-cold", "ultralow temperature", "freezer storage", "frozen sample storage", "deep freeze", "congelatore", "Tiefkühlung", "congélateur", "cryogenic storage", "frozen archive", "minus 20", "minus 80"],
+        "probability": 2,
+        "impact": 3
+      },
+      {
+        "id": "MR-14",
+        "name": "Analyzer connections optional or partial pre-analytics scope",
+        "description": "The tender describes analyzer connectivity as optional or desirable rather than mandatory, suggesting the customer may not pursue full TLA. This limits the commercial value of the project and may signal a future scope extension risk or a customer not fully committed to TLA.",
+        "signals": ["analyzer connection optional", "optional connectivity", "future analyzer integration", "pre-analytics phase 1", "connectivity in phase 2", "without analyzer", "solo preanalitica", "connessione opzionale", "optionale Anbindung"],
+        "probability": 2,
+        "impact": 2
+      },
+      {
+        "id": "MR-15",
+        "name": "Project manager or service team required to speak a specific language",
+        "description": "The tender explicitly requires that Inpeco's project manager, application specialists, or service engineers communicate in a specific language (e.g., local national language only). This may constrain resource allocation and staffing options.",
+        "signals": ["project manager must speak", "service engineer in [language]", "local language required", "native speaker", "communication in [language]", "project team language", "lingua del team", "Sprache des Projektleiters", "langue du chef de projet", "language requirement for team"]
       }
     ]
   }
