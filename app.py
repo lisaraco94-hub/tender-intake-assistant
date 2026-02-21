@@ -59,12 +59,14 @@ def save_risk_factors(rf: dict):
 
 
 def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 36_000) -> str:
-    """Load text from past bid response documents (won and lost) stored in the knowledge base."""
+    """Load text from past bid response documents stored in the knowledge base."""
     parts = []
     total = 0
     for folder, label in [
-        ("won",  "WON TENDER — Inpeco's Response"),
-        ("lost", "LOST TENDER — Inpeco's Response"),
+        ("responses", "PAST BID RESPONSE — Inpeco"),
+        # backward-compat with old won/lost folders
+        ("won",  "PAST BID RESPONSE (won) — Inpeco"),
+        ("lost", "PAST BID RESPONSE (lost) — Inpeco"),
     ]:
         folder_path = f"assets/knowledge/{folder}"
         if not os.path.exists(folder_path):
@@ -254,6 +256,7 @@ section[data-testid="stSidebar"] {{
     position: relative;
     overflow: hidden;
     margin-bottom: 0.6rem;
+    min-height: 230px;
     transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
 }}
 .feat-card::before {{
@@ -503,11 +506,26 @@ section[data-testid="stSidebar"] {{
     border-color: rgba(255,255,255,0.12) !important;
 }}
 
-/* ── Tabs ── */
+/* ── Tabs su sfondo azzurro ── */
+.stTabs [data-baseweb="tab-list"] {{
+    background: rgba(0,0,0,0.12) !important;
+    border-radius: 10px !important;
+    padding: 4px !important;
+    gap: 2px !important;
+    border: none !important;
+}}
 .stTabs [data-baseweb="tab"] {{
     font-weight: 600 !important;
     font-size: 0.82rem !important;
     font-family: 'Montserrat', sans-serif !important;
+    color: rgba(255,255,255,0.82) !important;
+    border-radius: 7px !important;
+    border: none !important;
+    background: transparent !important;
+}}
+.stTabs [aria-selected="true"] {{
+    background: {WHITE} !important;
+    color: {NAVY} !important;
 }}
 
 /* ── Empty state ── */
@@ -582,7 +600,7 @@ def view_home():
           <div class="feat-badge feat-badge-orange">{lib_count} tender{"s" if lib_count != 1 else ""}</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open →", key="home_library", use_container_width=True):
+        if st.button("Open →", key="home_library", use_container_width=True, type="primary"):
             st.session_state.view = "library"
             st.rerun()
 
@@ -592,13 +610,13 @@ def view_home():
           <span class="feat-icon">🧠</span>
           <div class="feat-title">Knowledge Base</div>
           <div class="feat-desc">
-            Upload custom showstoppers, risk registers, and past won/lost tenders
-            to continuously improve screening accuracy.
+            Upload risks, showstoppers and past bid responses
+            to continuously improve the AI screening accuracy.
           </div>
           <div class="feat-badge feat-badge-orange">Configurable</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open →", key="home_knowledge", use_container_width=True):
+        if st.button("Open →", key="home_knowledge", use_container_width=True, type="primary"):
             st.session_state.view = "knowledge"
             st.rerun()
 
@@ -623,31 +641,56 @@ def view_analyze():
         st.session_state.run_done = False
         st.rerun()
 
-    # Sidebar
-    with st.sidebar:
-        st.markdown("### ⚙️ Settings")
-        api_key = os.environ.get("OPENAI_API_KEY", "")
+    # ── API key + depth — visible in main area ──────────────────────
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    col_key, col_depth = st.columns([3, 1], gap="large")
+    with col_key:
         if not api_key:
-            api_key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...")
+            st.markdown(
+                '<div class="warn-box" style="margin-bottom:0.4rem;">'
+                '🔑 <b>OpenAI API Key required</b> — enter it below to run the analysis.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            api_key = st.text_input(
+                "OpenAI API Key",
+                type="password",
+                placeholder="sk-…",
+                key="api_key_main",
+            )
             if api_key:
                 os.environ["OPENAI_API_KEY"] = api_key
+                st.rerun()
         else:
-            st.success("API key active ✓")
-
-        st.divider()
-        st.markdown("**Analysis depth**")
+            st.markdown(
+                '<div style="background:rgba(255,255,255,0.18);border-radius:8px;'
+                'padding:0.55rem 1rem;font-size:0.82rem;color:white;">'
+                '🔑 API Key attiva ✓'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+    with col_depth:
         detail = st.select_slider(
-            "depth",
+            "Analysis depth",
             options=["Low", "Medium", "High"],
             value=st.session_state.detail,
-            label_visibility="collapsed",
         )
         st.session_state.detail = detail
         st.caption({
-            "Low":    "~1–2 min · Showstoppers + top 3 risks",
-            "Medium": "~2–4 min · Full risk + requirements",
-            "High":   "~4–8 min · Exhaustive analysis",
+            "Low":    "~1–2 min · solo showstopper",
+            "Medium": "~2–4 min · rischi + requisiti",
+            "High":   "~4–8 min · analisi completa",
         }[detail])
+
+    # Sidebar (still available for advanced users)
+    with st.sidebar:
+        st.markdown("### ⚙️ Settings")
+        if not os.environ.get("OPENAI_API_KEY"):
+            sk = st.text_input("OpenAI API Key", type="password", placeholder="sk-...", key="api_key_sidebar")
+            if sk:
+                os.environ["OPENAI_API_KEY"] = sk
+        else:
+            st.success("API key active ✓")
 
     # Upload
     st.markdown('<div class="section-heading">Upload Tender Documents</div>', unsafe_allow_html=True)
@@ -843,10 +886,9 @@ def view_knowledge():
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2 = st.tabs([
         "📁  Risk Factors & Showstoppers",
-        "🏆  Won Tenders",
-        "❌  Lost Tenders",
+        "📄  Past Bid Responses",
     ])
 
     with tab1:
@@ -933,111 +975,49 @@ def view_knowledge():
         except Exception as e:
             st.warning(f"Could not load risk register: {e}")
 
-        # ── Advanced: replace entire register via JSON upload ────────
-        with st.expander("Advanced: replace entire register via JSON upload"):
-            rf_up = st.file_uploader("Upload risk_factors.json", type=["json"], key="kb_rf")
-            if rf_up:
-                try:
-                    data = json.loads(rf_up.read().decode("utf-8"))
-                    save_risk_factors(data)
-                    n_ss = len(data.get("showstoppers", []) or data.get("risk_register", {}).get("showstoppers", []))
-                    n_rf = len(data.get("risk_factors", []) or data.get("risk_register", {}).get("risk_factors", []))
-                    st.success(f"Risk register replaced — {n_ss} showstoppers, {n_rf} risk factors.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
     with tab2:
-        st.markdown('<div class="section-heading">Won Tenders — Inpeco\'s Bid Responses</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-heading">Past Bid Responses</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="info-box">
-          <b>Upload Inpeco's written responses / technical offers for tenders you WON.</b><br><br>
-          The AI reads these to learn <em>what Inpeco successfully committed to</em> — proven capabilities,
-          typical delivery timelines, commercial terms that worked, and the language used when confident.
-          These documents are automatically included in every future analysis.
+          <b>Carica qui i documenti con le risposte di Inpeco a gare passate</b> — file che contengono
+          domande della stazione appaltante e le risposte di Inpeco.<br><br>
+          Il sistema legge queste risposte per capire <em>cosa Inpeco sa fare davvero</em>:
+          individua le risposte decise (capacità consolidate) e il linguaggio diplomatico che
+          segnala limitazioni reali — frasi come <em>"da confermare in fase di progetto"</em>,
+          <em>"compatibile in linea di principio"</em>, <em>"soggetto a sopralluogo"</em>.<br><br>
+          Questi file vengono caricati automaticamente in ogni nuova analisi.
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("""
-        <div class="warn-box">
-          📌 <b>Upload Inpeco's response document</b>, not the original tender.
-          The response is what reveals your real capabilities and commitments.
-        </div>
-        """, unsafe_allow_html=True)
-        won_ups = st.file_uploader(
-            "Upload Inpeco response documents (PDF, DOCX, TXT…)",
-            type=sorted(SUPPORTED_EXTENSIONS),
-            accept_multiple_files=True,
-            key="kb_won",
-        )
-        if won_ups:
-            os.makedirs("assets/knowledge/won", exist_ok=True)
-            for f in won_ups:
-                with open(f"assets/knowledge/won/{f.name}", "wb") as out:
-                    out.write(f.getvalue())
-            st.success(f"{len(won_ups)} file(s) added to Won knowledge base.")
-        won_dir = "assets/knowledge/won"
-        if os.path.exists(won_dir) and os.listdir(won_dir):
-            files = sorted(os.listdir(won_dir))
-            st.markdown(f"**Stored ({len(files)} response document(s)):**")
-            for fn in files:
-                c_fn, c_del = st.columns([10, 1])
-                c_fn.markdown(f"- `{fn}`")
-                if c_del.button("🗑", key=f"del_won_{fn}", help="Remove"):
-                    os.remove(os.path.join(won_dir, fn))
-                    st.rerun()
-        else:
-            st.markdown("""
-            <div class="empty-state">
-              <div class="empty-icon">📂</div>
-              <div class="empty-msg">No won-tender responses uploaded yet.</div>
-            </div>
-            """, unsafe_allow_html=True)
 
-    with tab3:
-        st.markdown('<div class="section-heading">Lost Tenders — Inpeco\'s Bid Responses</div>', unsafe_allow_html=True)
-        st.markdown("""
-        <div class="info-box">
-          <b>Upload Inpeco's written responses / technical offers for tenders you LOST.</b><br><br>
-          The AI looks for the soft or hedged language that often signals real limitations —
-          phrases like <em>"subject to site survey"</em>, <em>"to be confirmed at kick-off"</em>,
-          <em>"in principle compatible"</em>. These patterns reveal where Inpeco struggles even
-          when the response appears compliant on the surface.
-          These documents are automatically included in every future analysis.
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("""
-        <div class="warn-box">
-          📌 <b>Upload Inpeco's response document</b>, not the original tender.
-          The response — with its diplomatic wording — is what exposes the real gaps.
-        </div>
-        """, unsafe_allow_html=True)
-        lost_ups = st.file_uploader(
-            "Upload Inpeco response documents (PDF, DOCX, TXT…)",
+        resp_ups = st.file_uploader(
+            "Carica documenti risposta (PDF, DOCX, TXT…)",
             type=sorted(SUPPORTED_EXTENSIONS),
             accept_multiple_files=True,
-            key="kb_lost",
+            key="kb_responses",
         )
-        if lost_ups:
-            os.makedirs("assets/knowledge/lost", exist_ok=True)
-            for f in lost_ups:
-                with open(f"assets/knowledge/lost/{f.name}", "wb") as out:
+        resp_dir = "assets/knowledge/responses"
+        if resp_ups:
+            os.makedirs(resp_dir, exist_ok=True)
+            for f in resp_ups:
+                with open(os.path.join(resp_dir, f.name), "wb") as out:
                     out.write(f.getvalue())
-            st.success(f"{len(lost_ups)} file(s) added to Lost knowledge base.")
-        lost_dir = "assets/knowledge/lost"
-        if os.path.exists(lost_dir) and os.listdir(lost_dir):
-            files = sorted(os.listdir(lost_dir))
-            st.markdown(f"**Stored ({len(files)} response document(s)):**")
+            st.success(f"{len(resp_ups)} file/i aggiunto/i alla knowledge base.")
+
+        if os.path.exists(resp_dir) and os.listdir(resp_dir):
+            files = sorted(os.listdir(resp_dir))
+            st.markdown(f"**Documenti caricati ({len(files)}):**")
             for fn in files:
                 c_fn, c_del = st.columns([10, 1])
                 c_fn.markdown(f"- `{fn}`")
-                if c_del.button("🗑", key=f"del_lost_{fn}", help="Remove"):
-                    os.remove(os.path.join(lost_dir, fn))
+                if c_del.button("🗑", key=f"del_resp_{fn}", help="Rimuovi"):
+                    os.remove(os.path.join(resp_dir, fn))
                     st.rerun()
         else:
             st.markdown("""
             <div class="empty-state">
               <div class="empty-icon">📂</div>
-              <div class="empty-msg">No lost-tender responses uploaded yet.</div>
+              <div class="empty-msg">Nessun documento caricato ancora.<br>
+              Carica le risposte di Inpeco a gare passate per arricchire l'analisi.</div>
             </div>
             """, unsafe_allow_html=True)
 
