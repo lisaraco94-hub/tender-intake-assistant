@@ -5,6 +5,7 @@ AI-powered analysis for TLA/IVD clinical laboratory tenders.
 
 import json
 import os
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -16,471 +17,989 @@ from src.report_docx import build_docx
 # ─── Page config (must be first Streamlit call) ───────────────────
 st.set_page_config(
     page_title="Inpeco · Tender Intake",
-    page_icon="assets/favicon.png" if os.path.exists("assets/favicon.png") else "🔬",
+    page_icon="🔬",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ─── Brand style ──────────────────────────────────────────────────
-try:
-    with open("assets/brand_style.json", "r", encoding="utf-8") as f:
-        brand = json.load(f)
-except FileNotFoundError:
-    brand = {"brand_name": "Inpeco", "primary_hex": "#33bce5", "accent_hex": "#f3b08f"}
+# ─── Brand colours ────────────────────────────────────────────────
+PRIMARY  = "#00AEEF"   # Inpeco cyan
+ORANGE   = "#F7941D"   # Inpeco orange
+NAVY     = "#003865"   # Inpeco navy
+LIGHT_BG = "#F4F7FA"
+WHITE    = "#FFFFFF"
 
-PRIMARY = brand["primary_hex"]
-ACCENT = brand["accent_hex"]
-NAVY = "#0d2b45"
+# ─── Library persistence ─────────────────────────────────────────
+LIBRARY_PATH = "assets/tender_library.json"
 
-# ─── Custom CSS ───────────────────────────────────────────────────
+
+def load_library() -> list:
+    if os.path.exists(LIBRARY_PATH):
+        try:
+            with open(LIBRARY_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+
+def save_to_library(entry: dict):
+    lib = load_library()
+    lib.insert(0, entry)
+    with open(LIBRARY_PATH, "w", encoding="utf-8") as f:
+        json.dump(lib, f, ensure_ascii=False, indent=2)
+
+
+# ─── Session state ────────────────────────────────────────────────
+if "view" not in st.session_state:
+    st.session_state.view = "home"
+if "report" not in st.session_state:
+    st.session_state.report = None
+if "run_done" not in st.session_state:
+    st.session_state.run_done = False
+if "detail" not in st.session_state:
+    st.session_state.detail = "Medium"
+
+# ─── Global CSS + Montserrat ──────────────────────────────────────
 st.markdown(f"""
 <style>
-/* ── Header ── */
-.inpeco-header {{
-    background: linear-gradient(135deg, {NAVY} 0%, #1c4a6e 100%);
-    padding: 1.4rem 2rem 1.2rem 2rem;
-    border-radius: 10px;
-    margin-bottom: 1.8rem;
-    display: flex;
-    align-items: center;
-    gap: 1.2rem;
-}}
-.inpeco-wordmark {{
-    font-size: 2rem;
-    font-weight: 800;
-    color: {PRIMARY};
-    letter-spacing: 0.12em;
-    line-height: 1;
-}}
-.inpeco-tagline {{
-    font-size: 0.78rem;
-    color: #8db4cc;
-    margin-top: 0.3rem;
-    letter-spacing: 0.03em;
-}}
-.header-divider {{
-    width: 2px;
-    height: 2.8rem;
-    background: {PRIMARY};
-    opacity: 0.4;
-    border-radius: 2px;
-}}
-.header-app-title {{
-    font-size: 1rem;
-    font-weight: 600;
-    color: #e8f4fb;
-}}
-.header-app-sub {{
-    font-size: 0.75rem;
-    color: #8db4cc;
-    margin-top: 0.2rem;
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
+
+*, *::before, *::after {{
+    font-family: 'Montserrat', sans-serif !important;
 }}
 
-/* ── Verdict banner ── */
-.verdict-go {{
-    background: linear-gradient(90deg, #e6f9f0, #d4f5e5);
-    border-left: 5px solid #27ae60;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
+.stApp {{
+    background: {LIGHT_BG} !important;
+}}
+
+[data-testid="collapsedControl"] {{
+    display: none;
+}}
+
+/* ── Navbar ── */
+.top-nav {{
+    background: {NAVY};
+    padding: 0.85rem 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 0 0 14px 14px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 24px rgba(0,56,101,0.2);
+}}
+.nav-brand {{
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}}
+.nav-wordmark {{
+    font-size: 1.75rem;
+    font-weight: 900;
+    color: {PRIMARY};
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    line-height: 1;
+}}
+.nav-tagline {{
+    font-size: 0.58rem;
+    color: rgba(255,255,255,0.42);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 0.18rem;
+}}
+.nav-sep {{
+    width: 1.5px;
+    height: 2.2rem;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+}}
+.nav-app {{
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.72);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}}
+.nav-label {{
+    font-size: 0.77rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.78);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.09);
+    padding: 0.28rem 1rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.14);
+}}
+.nav-dot {{
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background: {ORANGE};
+    border-radius: 50%;
+    margin-right: 0.45rem;
+    vertical-align: middle;
+    animation: blink 2s ease-in-out infinite;
+}}
+@keyframes blink {{
+    0%, 100% {{ opacity: 1; }}
+    50%       {{ opacity: 0.3; }}
+}}
+
+/* ── Hero ── */
+.hero {{
+    text-align: center;
+    padding: 2.6rem 2rem 1.6rem;
+}}
+.hero-title {{
+    font-size: 2.4rem;
+    font-weight: 800;
+    color: {NAVY};
+    line-height: 1.2;
+    margin-bottom: 0.55rem;
+}}
+.hero-title span {{
+    color: {PRIMARY};
+}}
+.hero-sub {{
+    font-size: 0.96rem;
+    color: #5a7a99;
+    font-weight: 400;
+    max-width: 540px;
+    margin: 0 auto;
+    line-height: 1.75;
+}}
+
+/* ── Feature cards ── */
+.feat-card {{
+    background: {WHITE};
+    border-radius: 18px;
+    padding: 2.4rem 2rem 1.6rem;
+    text-align: center;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.065);
+    border: 2px solid transparent;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 0.6rem;
+    transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
+}}
+.feat-card::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, {PRIMARY}, {ORANGE});
+}}
+.feat-card:hover {{
+    transform: translateY(-5px);
+    box-shadow: 0 16px 40px rgba(0,56,101,0.13);
+    border-color: {PRIMARY};
+}}
+.feat-icon {{
+    font-size: 2.8rem;
     margin-bottom: 1rem;
+    display: block;
+}}
+.feat-title {{
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: {NAVY};
+    margin-bottom: 0.5rem;
+}}
+.feat-desc {{
+    font-size: 0.82rem;
+    color: #6a8aaa;
+    line-height: 1.65;
+}}
+.feat-badge {{
+    display: inline-block;
+    background: {PRIMARY}22;
+    color: {PRIMARY};
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.7rem;
+    border-radius: 20px;
+    margin-top: 0.9rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}}
+.feat-badge-orange {{
+    background: {ORANGE}22;
+    color: {ORANGE};
+}}
+
+/* ── Section headings ── */
+.section-heading {{
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: {NAVY};
+    border-left: 4px solid {PRIMARY};
+    padding-left: 0.75rem;
+    margin: 1.6rem 0 1rem;
+    letter-spacing: 0.01em;
+}}
+.section-heading-orange {{
+    border-left-color: {ORANGE};
+}}
+
+/* ── Verdict banners ── */
+.verdict-go {{
+    background: linear-gradient(135deg, #e6f9f0, #d4f5e5);
+    border-left: 5px solid #27ae60;
+    border-radius: 12px;
+    padding: 1.2rem 1.8rem;
+    margin-bottom: 1.2rem;
 }}
 .verdict-go-mit {{
-    background: linear-gradient(90deg, #fff8e6, #fef0c7);
-    border-left: 5px solid #f0a500;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
-    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #fff8e6, #fef0c7);
+    border-left: 5px solid {ORANGE};
+    border-radius: 12px;
+    padding: 1.2rem 1.8rem;
+    margin-bottom: 1.2rem;
 }}
 .verdict-nogo {{
-    background: linear-gradient(90deg, #fff0f0, #fde8e8);
+    background: linear-gradient(135deg, #fff0f0, #fde8e8);
     border-left: 5px solid #e74c3c;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
-    margin-bottom: 1rem;
+    border-radius: 12px;
+    padding: 1.2rem 1.8rem;
+    margin-bottom: 1.2rem;
 }}
 .verdict-label {{
-    font-size: 1.5rem;
+    font-size: 1.55rem;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
 }}
 .verdict-score {{
     font-size: 0.85rem;
-    opacity: 0.75;
-    margin-top: 0.2rem;
+    opacity: 0.72;
+    margin-top: 0.3rem;
 }}
 .verdict-rationale {{
-    font-size: 0.82rem;
-    margin-top: 0.5rem;
-    opacity: 0.85;
+    font-size: 0.85rem;
+    margin-top: 0.6rem;
+    opacity: 0.88;
     font-style: italic;
+    line-height: 1.55;
 }}
 
 /* ── Showstopper card ── */
 .ss-card {{
     background: #fff5f5;
     border: 1.5px solid #e74c3c;
-    border-radius: 8px;
-    padding: 0.85rem 1rem;
-    margin-bottom: 0.5rem;
+    border-radius: 10px;
+    padding: 0.9rem 1.15rem;
+    margin-bottom: 0.6rem;
 }}
-.ss-id {{ font-size: 0.72rem; font-weight: 700; color: #c0392b; letter-spacing: 0.05em; }}
-.ss-desc {{ font-size: 0.9rem; font-weight: 600; color: #1a2d42; margin: 0.2rem 0; }}
-.ss-evidence {{ font-size: 0.78rem; color: #555; }}
-
-/* ── Section headings ── */
-.section-heading {{
-    font-size: 1rem;
+.ss-id {{
+    font-size: 0.7rem;
     font-weight: 700;
-    color: {NAVY};
-    border-bottom: 2px solid {PRIMARY};
-    padding-bottom: 0.3rem;
-    margin: 1.2rem 0 0.8rem 0;
-    letter-spacing: 0.01em;
+    color: #c0392b;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}}
+.ss-desc {{
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #1a2d42;
+    margin: 0.25rem 0;
+}}
+.ss-evidence {{
+    font-size: 0.78rem;
+    color: #666;
+    line-height: 1.5;
 }}
 
-/* ── File tag ── */
+/* ── Library rows ── */
+.lib-row {{
+    background: {WHITE};
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 0.55rem;
+    border-left: 4px solid {PRIMARY};
+    box-shadow: 0 1px 8px rgba(0,0,0,0.055);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}}
+.lib-row-nogo {{ border-left-color: #e74c3c; }}
+.lib-row-mit  {{ border-left-color: {ORANGE}; }}
+.lib-title    {{ font-size: 0.9rem; font-weight: 700; color: {NAVY}; }}
+.lib-meta     {{ font-size: 0.74rem; color: #7a96b0; margin-top: 0.2rem; }}
+.lib-summary  {{ font-size: 0.78rem; color: #4a6a8a; margin-top: 0.3rem; font-style: italic; }}
+.lib-badge {{
+    font-size: 0.69rem;
+    font-weight: 700;
+    padding: 0.25rem 0.8rem;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}}
+.badge-go   {{ background: #d4f5e5; color: #1a7a48; }}
+.badge-mit  {{ background: #fef0c7; color: #a06000; }}
+.badge-nogo {{ background: #fde8e8; color: #c0392b; }}
+
+/* ── Info / warn boxes ── */
+.info-box {{
+    background: linear-gradient(135deg, #e8f4fb, #f0f7fb);
+    border-left: 3px solid {PRIMARY};
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-size: 0.8rem;
+    color: #2a4a62;
+    margin: 0.5rem 0;
+    line-height: 1.65;
+}}
+.warn-box {{
+    background: #fff8e6;
+    border-left: 3px solid {ORANGE};
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-size: 0.8rem;
+    color: #7a5200;
+    margin: 0.5rem 0;
+}}
+.trunc-warn {{
+    background: #fff8e6;
+    border-left: 3px solid {ORANGE};
+    border-radius: 4px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.78rem;
+    color: #7a5200;
+    margin-bottom: 0.6rem;
+}}
+
+/* ── File tags ── */
 .file-tag {{
     display: inline-block;
     background: #e8f4fb;
     border: 1px solid {PRIMARY};
     border-radius: 20px;
-    padding: 0.2rem 0.7rem;
-    font-size: 0.75rem;
+    padding: 0.2rem 0.72rem;
+    font-size: 0.72rem;
     color: {NAVY};
     margin: 0.15rem 0.2rem;
+    font-weight: 500;
 }}
 
-/* ── Detail info box ── */
-.detail-info {{
-    background: #f0f7fb;
-    border-left: 3px solid {PRIMARY};
-    border-radius: 4px;
-    padding: 0.5rem 0.8rem;
-    font-size: 0.78rem;
-    color: #2a4a62;
-    margin-top: 0.4rem;
+/* ── Metric containers ── */
+[data-testid="metric-container"] {{
+    background: {WHITE} !important;
+    border-radius: 10px !important;
+    padding: 0.8rem 1rem !important;
+    border: 1px solid #dde8f0 !important;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.04) !important;
 }}
 
-/* ── Sidebar tweaks ── */
+/* ── Buttons ── */
+.stButton > button[kind="primary"] {{
+    background: linear-gradient(135deg, {PRIMARY} 0%, #0090cc 100%) !important;
+    color: {WHITE} !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-family: 'Montserrat', sans-serif !important;
+}}
+.stButton > button[kind="secondary"] {{
+    border: 2px solid {PRIMARY} !important;
+    color: {PRIMARY} !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    font-family: 'Montserrat', sans-serif !important;
+}}
+
+/* ── Sidebar ── */
 [data-testid="stSidebar"] {{
-    background: #f5f9fd;
+    background: {NAVY} !important;
+}}
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] div {{
+    color: rgba(255,255,255,0.85) !important;
+}}
+[data-testid="stSidebar"] .stTextInput input {{
+    background: rgba(255,255,255,0.1) !important;
+    color: white !important;
+    border-color: rgba(255,255,255,0.25) !important;
+    border-radius: 8px !important;
 }}
 [data-testid="stSidebar"] hr {{
-    border-color: #cce3f0;
+    border-color: rgba(255,255,255,0.12) !important;
 }}
 
-/* ── Welcome card ── */
-.welcome-card {{
-    background: linear-gradient(135deg, #f0f7fb, #ffffff);
-    border: 1px solid #cce3f0;
-    border-radius: 12px;
-    padding: 2rem;
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab"] {{
+    font-weight: 600 !important;
+    font-size: 0.82rem !important;
+    font-family: 'Montserrat', sans-serif !important;
+}}
+
+/* ── Empty state ── */
+.empty-state {{
     text-align: center;
-    color: {NAVY};
+    padding: 3.5rem 2rem;
 }}
-.welcome-icon {{ font-size: 3rem; }}
-.welcome-title {{ font-size: 1.2rem; font-weight: 700; margin: 0.8rem 0 0.4rem 0; }}
-.welcome-sub {{ font-size: 0.85rem; color: #4a7a99; }}
-
-/* ── Truncation warning ── */
-.trunc-warn {{
-    background: #fff8e6;
-    border-left: 3px solid {ACCENT};
-    border-radius: 4px;
-    padding: 0.4rem 0.8rem;
-    font-size: 0.78rem;
-    color: #7a5200;
-    margin-bottom: 0.5rem;
-}}
+.empty-icon {{ font-size: 3rem; }}
+.empty-msg  {{ font-size: 0.9rem; color: #8aa5c0; margin-top: 0.8rem; line-height: 1.7; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Header ───────────────────────────────────────────────────────
-st.markdown(f"""
-<div class="inpeco-header">
-    <div>
-        <div class="inpeco-wordmark">INPECO</div>
-        <div class="inpeco-tagline">Total Laboratory Automation</div>
-    </div>
-    <div class="header-divider"></div>
-    <div>
-        <div class="header-app-title">Tender Intake Assistant</div>
-        <div class="header-app-sub">Pre-bid screening · AI-powered · TLA/IVD</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
-# ─── Sidebar ──────────────────────────────────────────────────────
-with st.sidebar:
-    # API Key
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        api_key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...")
-        if api_key:
-            os.environ["OPENAI_API_KEY"] = api_key
-
-    st.divider()
-
-    # Detail level
-    st.markdown("**Analysis detail level**")
-    detail = st.select_slider(
-        "detail",
-        options=["Low", "Medium", "High"],
-        value="Medium",
-        label_visibility="collapsed",
-    )
-    detail_meta = {
-        "Low":    ("~1–2 min", "Showstoppers + top 3 risks only. Ideal for bulk screening of many files."),
-        "Medium": ("~2–4 min", "Full risk assessment and requirements extraction."),
-        "High":   ("~4–8 min", "Exhaustive: all constraints, open questions, full evidence."),
+# ─── Shared navbar ────────────────────────────────────────────────
+def _nav(view_name: str):
+    labels = {
+        "home":      "Tender Intake Assistant",
+        "analyze":   "Analyse Tender",
+        "library":   "Tender Library",
+        "knowledge": "Knowledge Base",
     }
-    dur, desc = detail_meta[detail]
-    st.markdown(f'<div class="detail-info"><b>{dur}</b> — {desc}</div>', unsafe_allow_html=True)
+    label = labels.get(view_name, "")
+    dot   = '<span class="nav-dot"></span>' if view_name != "home" else ""
+    st.markdown(f"""
+    <div class="top-nav">
+      <div class="nav-brand">
+        <div>
+          <div class="nav-wordmark">INPECO</div>
+          <div class="nav-tagline">Total Laboratory Automation</div>
+        </div>
+        <div class="nav-sep"></div>
+        <div class="nav-app">Tender Intake</div>
+      </div>
+      <div class="nav-label">{dot}{label}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.divider()
 
-    # File upload
-    st.markdown("**Tender documents**")
-    accepted_types = sorted(SUPPORTED_EXTENSIONS)
-    uploaded_files = st.file_uploader(
-        "files",
-        type=accepted_types,
-        accept_multiple_files=True,
-        label_visibility="collapsed",
-        help=f"Accepted: {', '.join('.' + e for e in accepted_types)}",
-    )
+# ─── HOME ─────────────────────────────────────────────────────────
+def view_home():
+    _nav("home")
 
-    if uploaded_files:
-        total_kb = sum(f.size for f in uploaded_files) // 1024
-        st.markdown(
-            " ".join(
-                f'<span class="file-tag">{f.name}</span>'
-                for f in uploaded_files
-            ),
-            unsafe_allow_html=True,
+    st.markdown("""
+    <div class="hero">
+      <div class="hero-title">Tender Intake <span>Assistant</span></div>
+      <div class="hero-sub">
+        AI-powered pre-bid screening for TLA/IVD clinical laboratory tenders.<br>
+        Analyse risks, extract requirements, and make faster Go/No-Go decisions.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    lib_count = len(load_library())
+    c1, c2, c3 = st.columns(3, gap="large")
+
+    with c1:
+        st.markdown("""
+        <div class="feat-card">
+          <span class="feat-icon">📋</span>
+          <div class="feat-title">Analyse Tender</div>
+          <div class="feat-desc">
+            Upload tender documents, run AI analysis, and receive a full pre-bid report
+            with Go/No-Go recommendation, risks, requirements, and milestones.
+          </div>
+          <div class="feat-badge">AI · GPT-4o</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open →", key="home_analyze", use_container_width=True, type="primary"):
+            st.session_state.view = "analyze"
+            st.session_state.run_done = False
+            st.rerun()
+
+    with c2:
+        st.markdown(f"""
+        <div class="feat-card">
+          <span class="feat-icon">📚</span>
+          <div class="feat-title">Tender Library</div>
+          <div class="feat-desc">
+            Browse every analysed tender — date, client, country, verdict, and a
+            one-line summary. Track your history and export as CSV.
+          </div>
+          <div class="feat-badge feat-badge-orange">{lib_count} tender{"s" if lib_count != 1 else ""}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open →", key="home_library", use_container_width=True):
+            st.session_state.view = "library"
+            st.rerun()
+
+    with c3:
+        st.markdown("""
+        <div class="feat-card">
+          <span class="feat-icon">🧠</span>
+          <div class="feat-title">Knowledge Base</div>
+          <div class="feat-desc">
+            Upload custom showstoppers, risk registers, and past won/lost tenders
+            to continuously improve screening accuracy.
+          </div>
+          <div class="feat-badge feat-badge-orange">Configurable</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open →", key="home_knowledge", use_container_width=True):
+            st.session_state.view = "knowledge"
+            st.rerun()
+
+    # Footer bar
+    st.markdown(f"""
+    <div style="text-align:center;margin-top:3rem;padding:1.5rem;border-top:1px solid #dde8f0;">
+      <span style="font-size:0.72rem;color:#a0b8cc;letter-spacing:0.04em;">
+        INPECO · Tender Intake Assistant · Powered by GPT-4o
+        &nbsp;·&nbsp;
+        <span style="color:{ORANGE};">●</span>&nbsp;Active
+      </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ─── ANALYSE ──────────────────────────────────────────────────────
+def view_analyze():
+    _nav("analyze")
+
+    if st.button("← Back to Home", key="back_analyze"):
+        st.session_state.view = "home"
+        st.session_state.run_done = False
+        st.rerun()
+
+    # Sidebar
+    with st.sidebar:
+        st.markdown("### ⚙️ Settings")
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not api_key:
+            api_key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...")
+            if api_key:
+                os.environ["OPENAI_API_KEY"] = api_key
+        else:
+            st.success("API key active ✓")
+
+        st.divider()
+        st.markdown("**Analysis depth**")
+        detail = st.select_slider(
+            "depth",
+            options=["Low", "Medium", "High"],
+            value=st.session_state.detail,
+            label_visibility="collapsed",
         )
-        st.caption(f"{len(uploaded_files)} file(s) · {total_kb:,} KB total")
+        st.session_state.detail = detail
+        st.caption({
+            "Low":    "~1–2 min · Showstoppers + top 3 risks",
+            "Medium": "~2–4 min · Full risk + requirements",
+            "High":   "~4–8 min · Exhaustive analysis",
+        }[detail])
 
-    st.divider()
-
-    # Risk register
-    st.markdown("**Risk register**")
-    custom_rf = st.file_uploader(
-        "Custom risk_factors.json (optional)",
-        type=["json"],
-        label_visibility="visible",
+    # Upload
+    st.markdown('<div class="section-heading">Upload Tender Documents</div>', unsafe_allow_html=True)
+    accepted = sorted(SUPPORTED_EXTENSIONS)
+    uploaded_files = st.file_uploader(
+        "Drop files here or click to browse",
+        type=accepted,
+        accept_multiple_files=True,
+        help=f"Accepted: {', '.join('.' + e for e in accepted)}",
     )
-    if custom_rf:
+
+    with st.expander("Custom risk register (optional)"):
+        custom_rf_file = st.file_uploader(
+            "Upload risk_factors.json", type=["json"], key="rf_uploader"
+        )
+
+    # Load risk factors
+    if custom_rf_file:
         try:
-            risk_factors = json.loads(custom_rf.read().decode("utf-8"))
-            st.success("Custom register loaded")
+            risk_factors = json.loads(custom_rf_file.read().decode("utf-8"))
+            st.success("Custom risk register loaded.")
         except Exception as e:
             st.error(f"Invalid JSON: {e}")
             risk_factors = load_risk_factors()
     else:
         try:
             risk_factors = load_risk_factors()
-            st.caption("Using default Inpeco register")
         except FileNotFoundError:
-            st.error("assets/risk_factors.json not found")
+            st.error("assets/risk_factors.json not found.")
             st.stop()
 
-    st.divider()
+    if uploaded_files:
+        st.markdown(
+            " ".join(f'<span class="file-tag">{f.name}</span>' for f in uploaded_files),
+            unsafe_allow_html=True,
+        )
+        total_kb = sum(f.size for f in uploaded_files) // 1024
+        st.caption(f"{len(uploaded_files)} file(s) · {total_kb:,} KB")
 
-    # Run button
-    can_run = bool(uploaded_files) and bool(os.environ.get("OPENAI_API_KEY", ""))
-    run = st.button(
-        "Run Analysis",
-        disabled=not can_run,
-        use_container_width=True,
-        type="primary",
-    )
-    if not os.environ.get("OPENAI_API_KEY", ""):
-        st.caption("Enter your OpenAI API key above to proceed.")
-    elif not uploaded_files:
-        st.caption("Upload at least one tender document.")
+        can_run = bool(os.environ.get("OPENAI_API_KEY", ""))
+        if not can_run:
+            st.markdown(
+                '<div class="warn-box">⚠️ Enter your OpenAI API key in the sidebar to run analysis.</div>',
+                unsafe_allow_html=True,
+            )
 
-# ─── Main area — idle state ───────────────────────────────────────
-if not uploaded_files or not run:
-    st.markdown(f"""
-    <div class="welcome-card">
-        <div class="welcome-icon">📋</div>
-        <div class="welcome-title">Upload tender documents to begin</div>
-        <div class="welcome-sub">
-            Supported formats: {", ".join("." + e for e in sorted(SUPPORTED_EXTENSIONS))}<br>
-            You can upload multiple files from the same tender package.
+        if st.button("🔍 Run Analysis", disabled=not can_run, type="primary"):
+            all_pages: list[str] = []
+            with st.spinner("Reading files…"):
+                for uf in uploaded_files:
+                    pages = extract_from_file(uf.read(), uf.name)
+                    all_pages.append(f"=== FILE: {uf.name} ===")
+                    all_pages.extend(pages)
+
+            with st.spinner(f"Analysing {len(uploaded_files)} file(s) with GPT-4o [{detail}]…"):
+                try:
+                    report = build_prebid_report(all_pages, risk_factors=risk_factors, detail=detail)
+                    st.session_state.report = report
+                    st.session_state.run_done = True
+
+                    summary_line = (report.get("executive_summary") or [""])[0][:140]
+                    save_to_library({
+                        "date":    datetime.now().strftime("%Y-%m-%d"),
+                        "title":   report.get("tender_title") or "—",
+                        "client":  report.get("contracting_authority") or "—",
+                        "country": report.get("country") or "—",
+                        "verdict": report.get("go_nogo", {}).get("recommendation", "—"),
+                        "score":   report.get("go_nogo", {}).get("score", 0),
+                        "summary": summary_line,
+                        "files":   [f.name for f in uploaded_files],
+                    })
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Analysis failed: {e}")
+
+    if st.session_state.run_done and st.session_state.report:
+        _render_report(st.session_state.report)
+
+
+# ─── LIBRARY ──────────────────────────────────────────────────────
+def view_library():
+    _nav("library")
+
+    if st.button("← Back to Home", key="back_library"):
+        st.session_state.view = "home"
+        st.rerun()
+
+    st.markdown('<div class="section-heading">Tender Library</div>', unsafe_allow_html=True)
+
+    lib = load_library()
+    if not lib:
+        st.markdown("""
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <div class="empty-msg">No tenders analysed yet.<br>
+          Run your first analysis to start building the library.</div>
         </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # Stats
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total analysed", len(lib))
+    c2.metric("GO", sum(1 for e in lib if e.get("verdict") == "GO"))
+    c3.metric("GO w/ Mitigation", sum(1 for e in lib if "Mitigation" in (e.get("verdict") or "")))
+    c4.metric("NO-GO", sum(1 for e in lib if e.get("verdict") == "NO-GO"))
+
+    st.markdown('<div class="section-heading" style="margin-top:1.8rem;">All Tenders</div>', unsafe_allow_html=True)
+
+    search = st.text_input(
+        "search",
+        placeholder="🔍  Filter by title, client, country…",
+        label_visibility="collapsed",
+    )
+    filtered = lib
+    if search:
+        q = search.lower()
+        filtered = [
+            e for e in lib
+            if q in (
+                (e.get("title") or "") +
+                (e.get("client") or "") +
+                (e.get("country") or "") +
+                (e.get("summary") or "")
+            ).lower()
+        ]
+
+    st.caption(f"{len(filtered)} result(s)")
+
+    for entry in filtered:
+        v = entry.get("verdict", "—")
+        row_cls   = "lib-row" + (" lib-row-nogo" if v == "NO-GO" else " lib-row-mit" if "Mitigation" in v else "")
+        badge_cls = "badge-nogo" if v == "NO-GO" else ("badge-mit" if "Mitigation" in v else "badge-go")
+        st.markdown(f"""
+        <div class="{row_cls}">
+          <div style="flex:1;min-width:0;">
+            <div class="lib-title">{entry.get("title","—")}</div>
+            <div class="lib-meta">
+              📅 {entry.get("date","—")} &nbsp;·&nbsp;
+              🏢 {entry.get("client","—")} &nbsp;·&nbsp;
+              🌍 {entry.get("country","—")} &nbsp;·&nbsp;
+              Score: {entry.get("score","—")}/100
+            </div>
+            <div class="lib-summary">{entry.get("summary","")}</div>
+          </div>
+          <div><span class="lib-badge {badge_cls}">{v}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if filtered:
+        st.divider()
+        df_e = pd.DataFrame(filtered)
+        cols = [c for c in ["date", "title", "client", "country", "verdict", "score", "summary"] if c in df_e.columns]
+        st.download_button(
+            "⬇️ Export as CSV",
+            data=df_e[cols].to_csv(index=False),
+            file_name="tender_library.csv",
+            mime="text/csv",
+        )
+
+
+# ─── KNOWLEDGE BASE ───────────────────────────────────────────────
+def view_knowledge():
+    _nav("knowledge")
+
+    if st.button("← Back to Home", key="back_knowledge"):
+        st.session_state.view = "home"
+        st.rerun()
+
+    st.markdown('<div class="section-heading">Knowledge Base</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="info-box">
+      Enrich the assistant's analysis by uploading your own risk factors, showstoppers,
+      and past tender examples. The more context you provide, the more accurate
+      the screening results will be.
     </div>
     """, unsafe_allow_html=True)
-    st.stop()
 
-# ─── Extract text from all uploaded files ─────────────────────────
-all_pages: list[str] = []
-file_summary: list[str] = []
+    tab1, tab2, tab3 = st.tabs([
+        "📁  Risk Factors & Showstoppers",
+        "🏆  Won Tenders",
+        "❌  Lost Tenders",
+    ])
 
-with st.spinner("Reading files..."):
-    for uf in uploaded_files:
-        raw = uf.read()
-        pages = extract_from_file(raw, uf.name)
-        # Insert a file boundary marker so GPT-4o knows which file content is from
-        all_pages.append(f"=== FILE: {uf.name} ===")
-        all_pages.extend(pages)
-        file_summary.append(f"{uf.name} ({len(pages)} pages/chunks)")
+    with tab1:
+        st.markdown("**Replace the active risk register**")
+        st.markdown(
+            '<div class="info-box">Upload a <code>risk_factors.json</code> following the same schema '
+            "as the default file. It becomes the active register for all future analyses.</div>",
+            unsafe_allow_html=True,
+        )
+        rf_up = st.file_uploader("Upload risk_factors.json", type=["json"], key="kb_rf")
+        if rf_up:
+            try:
+                data = json.loads(rf_up.read().decode("utf-8"))
+                with open("assets/risk_factors.json", "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                n_ss = len(data.get("showstoppers", []) or data.get("risk_register", {}).get("showstoppers", []))
+                n_rf = len(data.get("risk_factors", []) or data.get("risk_register", {}).get("risk_factors", []))
+                st.success(f"Risk register updated — {n_ss} showstoppers, {n_rf} risk factors.")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-total_pages = len(all_pages)
+        # Show current register
+        try:
+            rf = load_risk_factors()
+            ss_list = rf.get("showstoppers") or rf.get("risk_register", {}).get("showstoppers", [])
+            rf_list = rf.get("risk_factors") or rf.get("risk_register", {}).get("risk_factors", [])
+            st.caption(f"Active register: {len(ss_list or [])} showstoppers · {len(rf_list or [])} risk factors")
+            with st.expander("View showstoppers"):
+                for ss in (ss_list or []):
+                    st.markdown(f"- **{ss.get('id','')}** — {ss.get('description','')}")
+            with st.expander("View risk factors"):
+                for r in (rf_list or []):
+                    st.markdown(f"- **{r.get('id','')}** — {r.get('description','')}")
+        except Exception:
+            pass
 
-# ─── Run AI analysis ──────────────────────────────────────────────
-with st.spinner(f"Analyzing {len(uploaded_files)} file(s) · {total_pages} sections · GPT-4o [{detail}]..."):
-    try:
-        report = build_prebid_report(all_pages, risk_factors=risk_factors, detail=detail)
-    except Exception as e:
-        st.error(f"Analysis failed: {e}")
-        st.stop()
+    with tab2:
+        st.markdown("**Upload won tender documents**")
+        st.markdown(
+            '<div class="info-box">These help calibrate what a successful bid looks like '
+            "and can be used as reference for future AI analyses.</div>",
+            unsafe_allow_html=True,
+        )
+        won_ups = st.file_uploader(
+            "Upload files",
+            type=sorted(SUPPORTED_EXTENSIONS) + ["json"],
+            accept_multiple_files=True,
+            key="kb_won",
+        )
+        if won_ups:
+            os.makedirs("assets/knowledge/won", exist_ok=True)
+            for f in won_ups:
+                with open(f"assets/knowledge/won/{f.name}", "wb") as out:
+                    out.write(f.getvalue())
+            st.success(f"{len(won_ups)} file(s) saved to knowledge base.")
+        won_dir = "assets/knowledge/won"
+        if os.path.exists(won_dir) and os.listdir(won_dir):
+            files = sorted(os.listdir(won_dir))
+            st.markdown(f"**Stored ({len(files)} files):**")
+            for fn in files:
+                st.markdown(f"- `{fn}`")
 
-# ─── Results ──────────────────────────────────────────────────────
-meta = report.get("_meta", {})
+    with tab3:
+        st.markdown("**Upload lost tender documents**")
+        st.markdown(
+            '<div class="info-box">Understanding why bids failed helps identify new showstoppers '
+            "and risk patterns for future analyses.</div>",
+            unsafe_allow_html=True,
+        )
+        lost_ups = st.file_uploader(
+            "Upload files",
+            type=sorted(SUPPORTED_EXTENSIONS) + ["json"],
+            accept_multiple_files=True,
+            key="kb_lost",
+        )
+        if lost_ups:
+            os.makedirs("assets/knowledge/lost", exist_ok=True)
+            for f in lost_ups:
+                with open(f"assets/knowledge/lost/{f.name}", "wb") as out:
+                    out.write(f.getvalue())
+            st.success(f"{len(lost_ups)} file(s) saved to knowledge base.")
+        lost_dir = "assets/knowledge/lost"
+        if os.path.exists(lost_dir) and os.listdir(lost_dir):
+            files = sorted(os.listdir(lost_dir))
+            st.markdown(f"**Stored ({len(files)} files):**")
+            for fn in files:
+                st.markdown(f"- `{fn}`")
 
-# Truncation warning
-if meta.get("truncated"):
-    st.markdown(
-        f'<div class="trunc-warn">⚠️ Document was truncated to fit the <b>{detail}</b> detail limit. '
-        f'Switch to <b>High</b> for complete analysis.</div>',
-        unsafe_allow_html=True,
-    )
 
-# ── GO / NO-GO verdict ────────────────────────────────────────────
-go_nogo = report.get("go_nogo", {})
-rec = go_nogo.get("recommendation", "—")
-score = go_nogo.get("score", 0)
-rationale = go_nogo.get("rationale", "")
+# ─── REPORT RENDERER ──────────────────────────────────────────────
+def _render_report(report: dict):
+    detail = st.session_state.get("detail", "Medium")
+    meta   = report.get("_meta", {})
 
-verdict_icons = {"GO": "✅", "GO with Mitigation": "⚠️", "NO-GO": "🚫"}
-verdict_classes = {"GO": "verdict-go", "GO with Mitigation": "verdict-go-mit", "NO-GO": "verdict-nogo"}
-icon = verdict_icons.get(rec, "⚪")
-cls = verdict_classes.get(rec, "verdict-go")
+    if meta.get("truncated"):
+        st.markdown(
+            f'<div class="trunc-warn">⚠️ Document truncated to fit the <b>{detail}</b> limit. '
+            f'Switch to <b>High</b> for complete analysis.</div>',
+            unsafe_allow_html=True,
+        )
 
-st.markdown(f"""
-<div class="{cls}">
-    <div class="verdict-label">{icon} {rec}</div>
-    <div class="verdict-score">Complexity score: {score} / 100</div>
-    <div class="verdict-rationale">{rationale}</div>
-</div>
-""", unsafe_allow_html=True)
+    # Verdict banner
+    go_nogo   = report.get("go_nogo", {})
+    rec       = go_nogo.get("recommendation", "—")
+    score     = go_nogo.get("score", 0)
+    rationale = go_nogo.get("rationale", "")
+    icons   = {"GO": "✅", "GO with Mitigation": "⚠️", "NO-GO": "🚫"}
+    classes = {"GO": "verdict-go", "GO with Mitigation": "verdict-go-mit", "NO-GO": "verdict-nogo"}
+    st.markdown(f"""
+    <div class="{classes.get(rec, 'verdict-go')}">
+      <div class="verdict-label">{icons.get(rec, "⚪")} {rec}</div>
+      <div class="verdict-score">Complexity score: {score} / 100</div>
+      <div class="verdict-rationale">{rationale}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ── Key metadata ──────────────────────────────────────────────────
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Tender type", (report.get("tender_type") or "—").upper())
-c2.metric("Submission deadline", report.get("submission_deadline") or "—")
-c3.metric("Est. value", report.get("estimated_value_eur") or "—")
-c4.metric("Authority", (report.get("contracting_authority") or "—")[:30])
+    # Key metrics
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Tender type",  (report.get("tender_type") or "—").upper())
+    c2.metric("Deadline",      report.get("submission_deadline") or "—")
+    c3.metric("Est. value",    report.get("estimated_value_eur") or "—")
+    c4.metric("Authority",    (report.get("contracting_authority") or "—")[:30])
 
-# ── Executive summary ─────────────────────────────────────────────
-st.markdown('<div class="section-heading">Executive Summary</div>', unsafe_allow_html=True)
-for line in report.get("executive_summary", []):
-    st.markdown(f"- {line}")
+    # Executive summary
+    st.markdown('<div class="section-heading">Executive Summary</div>', unsafe_allow_html=True)
+    for line in report.get("executive_summary", []):
+        st.markdown(f"- {line}")
 
-# ── Showstoppers ──────────────────────────────────────────────────
-showstoppers = report.get("showstoppers", [])
-if showstoppers:
-    st.markdown(
-        f'<div class="section-heading">🚨 Showstoppers ({len(showstoppers)})</div>',
-        unsafe_allow_html=True,
-    )
-    for ss in showstoppers:
-        st.markdown(f"""
+    # Showstoppers
+    showstoppers = report.get("showstoppers", [])
+    if showstoppers:
+        st.markdown(
+            f'<div class="section-heading section-heading-orange">🚨 Showstoppers ({len(showstoppers)})</div>',
+            unsafe_allow_html=True,
+        )
+        for ss in showstoppers:
+            st.markdown(f"""
 <div class="ss-card">
-    <div class="ss-id">{ss.get("id", "SS")}</div>
-    <div class="ss-desc">{ss.get("description", "")}</div>
-    <div class="ss-evidence">Evidence: {ss.get("evidence", "—")} · Impact: {ss.get("impact", "—")}</div>
-</div>
-""", unsafe_allow_html=True)
+  <div class="ss-id">{ss.get("id", "SS")}</div>
+  <div class="ss-desc">{ss.get("description", "")}</div>
+  <div class="ss-evidence">Evidence: {ss.get("evidence", "—")} · Impact: {ss.get("impact", "—")}</div>
+</div>""", unsafe_allow_html=True)
 
-# ── Tabbed results ────────────────────────────────────────────────
-risks = report.get("risks", [])
-reqs = report.get("requirements", {})
-deadlines = report.get("deadlines", [])
-deliverables = report.get("deliverables", [])
-open_qs = report.get("open_questions", [])
+    # Tabbed detail
+    risks        = report.get("risks", [])
+    reqs         = report.get("requirements", {})
+    deadlines    = report.get("deadlines", [])
+    deliverables = report.get("deliverables", [])
+    open_qs      = report.get("open_questions", [])
 
-tab_risks, tab_reqs, tab_milestones, tab_deliverables, tab_questions = st.tabs([
-    f"Risks ({len(risks)})",
-    "Requirements",
-    f"Milestones ({len(deadlines)})",
-    f"Deliverables ({len(deliverables)})",
-    f"Open Questions ({len(open_qs)})",
-])
+    t_risk, t_req, t_mile, t_del, t_q = st.tabs([
+        f"Risks ({len(risks)})",
+        "Requirements",
+        f"Milestones ({len(deadlines)})",
+        f"Deliverables ({len(deliverables)})",
+        f"Open Questions ({len(open_qs)})",
+    ])
 
-with tab_risks:
-    if risks:
-        df = pd.DataFrame(risks)
-        ordered_cols = [c for c in ["id", "risk", "category", "probability", "impact", "score", "evidence", "mitigation"] if c in df.columns]
-        st.dataframe(
-            df[ordered_cols].sort_values("score", ascending=False),
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info("No risks identified.")
+    with t_risk:
+        if risks:
+            df = pd.DataFrame(risks)
+            ordered = [c for c in ["id","risk","category","probability","impact","score","evidence","mitigation"] if c in df.columns]
+            st.dataframe(df[ordered].sort_values("score", ascending=False), use_container_width=True, hide_index=True)
+        else:
+            st.info("No risks identified.")
 
-with tab_reqs:
-    if reqs:
-        req_tabs = st.tabs([k.replace("_", " ").title() for k in reqs.keys()])
-        for rtab, (key, items) in zip(req_tabs, reqs.items()):
-            with rtab:
-                if items:
-                    for item in items:
+    with t_req:
+        if reqs:
+            sub = st.tabs([k.replace("_", " ").title() for k in reqs])
+            for tab, (key, items) in zip(sub, reqs.items()):
+                with tab:
+                    for item in (items or []):
                         st.markdown(f"- {item}")
-                else:
-                    st.caption("Nothing detected in this category.")
-    else:
-        st.info("No requirements extracted.")
+                    if not items:
+                        st.caption("Nothing detected.")
+        else:
+            st.info("No requirements extracted.")
 
-with tab_milestones:
-    if deadlines:
-        for d in deadlines:
-            st.markdown(f"- **{d.get('when', '?')}** — {d.get('milestone', '')}  \n  *{d.get('evidence', '')}*")
-    else:
-        st.info("No explicit milestones detected.")
+    with t_mile:
+        for d in (deadlines or []):
+            st.markdown(f"- **{d.get('when','?')}** — {d.get('milestone','')}  \n  *{d.get('evidence','')}*")
+        if not deadlines:
+            st.info("No milestones detected.")
 
-with tab_deliverables:
-    if deliverables:
-        for item in deliverables:
+    with t_del:
+        for item in (deliverables or []):
             st.markdown(f"- {item}")
-    else:
-        st.info("No deliverables listed.")
+        if not deliverables:
+            st.info("No deliverables listed.")
 
-with tab_questions:
-    if open_qs:
-        for q in open_qs:
+    with t_q:
+        for q in (open_qs or []):
             st.markdown(f"- {q}")
-    else:
-        st.info("No open questions flagged.")
+        if not open_qs:
+            st.info("No open questions flagged.")
 
-# ── Download + API usage ──────────────────────────────────────────
-st.divider()
-col_dl, col_meta = st.columns([2, 1])
+    # Download + API usage
+    st.divider()
+    col_dl, col_meta = st.columns([2, 1])
 
-with col_dl:
-    try:
-        docx_bytes = build_docx(report, PRIMARY, ACCENT)
-        safe_title = (report.get("tender_title") or "Report")[:40].replace(" ", "_")
-        st.download_button(
-            "Download Word Report",
-            data=docx_bytes,
-            file_name=f"Tender_Intake_{safe_title}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True,
-            type="primary",
-        )
-    except Exception as e:
-        st.warning(f"Could not generate Word report: {e}")
+    with col_dl:
+        try:
+            docx_bytes = build_docx(report, PRIMARY, ORANGE)
+            safe = (report.get("tender_title") or "Report")[:40].replace(" ", "_")
+            st.download_button(
+                "⬇️ Download Word Report",
+                data=docx_bytes,
+                file_name=f"Tender_Intake_{safe}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                type="primary",
+            )
+        except Exception as e:
+            st.warning(f"Could not generate Word report: {e}")
 
-with col_meta:
-    if meta:
-        with st.expander("API usage"):
-            st.caption(f"Model: {meta.get('model', 'gpt-4o')}")
-            st.caption(f"Tokens: {meta.get('total_tokens', 0):,}")
-            st.caption(f"Cost: ${meta.get('estimated_cost_usd', 0):.4f}")
-            st.caption(f"Files: {len(uploaded_files)} · Sections: {meta.get('pages_analyzed', 0)}")
-            if meta.get("truncated"):
-                st.caption(f"⚠️ Truncated at {meta.get('chars_analyzed', 0):,} chars")
+    with col_meta:
+        if meta:
+            with st.expander("API usage"):
+                st.caption(f"Model: {meta.get('model','gpt-4o')}")
+                st.caption(f"Tokens: {meta.get('total_tokens',0):,}")
+                st.caption(f"Cost: ${meta.get('estimated_cost_usd',0):.4f}")
+                st.caption(f"Sections: {meta.get('pages_analyzed',0)}")
+                if meta.get("truncated"):
+                    st.caption(f"⚠️ Truncated at {meta.get('chars_analyzed',0):,} chars")
+
+
+# ─── Router ───────────────────────────────────────────────────────
+_view = st.session_state.view
+if   _view == "home":      view_home()
+elif _view == "analyze":   view_analyze()
+elif _view == "library":   view_library()
+elif _view == "knowledge": view_knowledge()
+else:
+    st.session_state.view = "home"
+    st.rerun()
