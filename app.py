@@ -161,8 +161,16 @@ st.markdown(f"""
     font-family: 'Montserrat', sans-serif !important;
 }}
 
-.stApp {{
-    background: {LIGHT_BG} !important;
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMainBlockContainer"],
+.stMainBlockContainer,
+.block-container {{
+    background: {PRIMARY} !important;
+}}
+
+section[data-testid="stSidebar"] {{
+    background: {PRIMARY} !important;
 }}
 
 [data-testid="collapsedControl"] {{
@@ -171,48 +179,46 @@ st.markdown(f"""
 
 /* ── Navbar ── */
 .top-nav {{
-    background: {PRIMARY};
-    padding: 1rem 2.5rem;
+    background: transparent;
+    padding: 2.2rem 2.8rem 1.4rem;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: flex-start;
-    border-radius: 0 0 16px 16px;
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 28px rgba(0,174,239,0.28);
+    margin-bottom: 1.5rem;
 }}
 .nav-logo-block {{
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.18rem;
+    gap: 0.35rem;
 }}
 .nav-tagline {{
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 300;
     color: rgba(255,255,255,0.88);
-    letter-spacing: 0.04em;
-    text-transform: none;
-    margin-top: 0;
+    letter-spacing: 0.05em;
+    padding-left: 0.1rem;
 }}
 
 /* ── Hero ── */
 .hero {{
     text-align: center;
-    padding: 2.6rem 2rem 1.6rem;
+    padding: 1rem 2rem 2rem;
 }}
 .hero-title {{
     font-size: 2.4rem;
     font-weight: 800;
-    color: {NAVY};
+    color: {WHITE};
     line-height: 1.2;
     margin-bottom: 0.55rem;
 }}
 .hero-title span {{
-    color: {PRIMARY};
+    color: {WHITE};
+    opacity: 0.82;
 }}
 .hero-sub {{
     font-size: 0.96rem;
-    color: #5a7a99;
+    color: rgba(255,255,255,0.8);
     font-weight: 400;
     max-width: 540px;
     margin: 0 auto;
@@ -498,34 +504,18 @@ st.markdown(f"""
 
 
 # ─── Shared navbar ────────────────────────────────────────────────
-# Inpeco logo — white SVG (sphere mark + wordmark)
-_INPECO_LOGO_SVG = """
-<svg height="38" viewBox="0 0 230 38" xmlns="http://www.w3.org/2000/svg" fill="none" aria-label="Inpeco">
-  <!-- Sphere mark: outer ring -->
-  <circle cx="19" cy="19" r="17.5" stroke="white" stroke-width="2.2"/>
-  <!-- Sphere mark: vertical ellipse (longitude) -->
-  <ellipse cx="19" cy="19" rx="8.2" ry="17.5" stroke="white" stroke-width="1.6"/>
-  <!-- Sphere mark: horizontal equator -->
-  <line x1="1.5" y1="19" x2="36.5" y2="19" stroke="white" stroke-width="1.6"/>
-  <!-- "inpeco" wordmark — Montserrat bold, white -->
-  <text x="47" y="27.5"
-        font-family="Montserrat, Arial, sans-serif"
-        font-weight="800"
-        font-size="24"
-        fill="white"
-        letter-spacing="0.5">inpeco</text>
-</svg>
-"""
+# Inpeco logo — white SVG on one line (no Markdown code-block issue)
+# Large filled circle + small dot upper-left + "inpeco" bold wordmark
+_INPECO_LOGO_SVG = '<svg height="52" viewBox="0 0 255 52" xmlns="http://www.w3.org/2000/svg"><circle cx="26" cy="33" r="22" fill="white"/><circle cx="8" cy="8" r="7.5" fill="white"/><text x="57" y="44" font-family="Montserrat,Arial,sans-serif" font-weight="900" font-size="34" fill="white">inpeco</text></svg>'
 
 def _nav(view_name: str):
-    st.markdown(f"""
-    <div class="top-nav">
-      <div class="nav-logo-block">
-        {_INPECO_LOGO_SVG}
-        <div class="nav-tagline">Creating a healthier tomorrow, today</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="top-nav"><div class="nav-logo-block">'
+        + _INPECO_LOGO_SVG
+        + '<div class="nav-tagline">Creating a healthier tomorrow, today</div>'
+        + '</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ─── HOME ─────────────────────────────────────────────────────────
