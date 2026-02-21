@@ -1,67 +1,67 @@
 # Tender Intake Assistant
 
-Pre-bid screening automatico per gare d'appalto nel settore della Total Laboratory Automation. Carica il documento di gara, ottieni in pochi minuti un'analisi strutturata con raccomandazione Go / No-Go, risk register pesato, requisiti chiave e report Word scaricabile.
+AI-powered pre-bid screening for Total Laboratory Automation tenders. Upload a tender document, get a structured Go / No-Go recommendation with risk register, key requirements and a downloadable Word report — in minutes, not days.
 
 ---
 
-## Il problema
+## The problem
 
-Valutare se partecipare a una gara richiede ore di lettura, confronto interno e giudizio esperto. Molte gare vengono analizzate e poi abbandonate. Alcune vengono vinte con rischi che non erano stati visti in fase di pre-bid.
+Evaluating whether to respond to a tender requires hours of careful reading, internal alignment and expert judgment. Many tenders are analysed and then dropped. Some are won with risks that were never properly flagged at the pre-bid stage.
 
-Questo tool comprime quella prima valutazione da giorni a minuti, senza sacrificare la qualità del giudizio.
+This tool compresses that initial evaluation from days to minutes — without sacrificing the quality of the assessment.
 
 ---
 
-## Come funziona
+## How it works
 
-Il documento di gara viene estratto e passato a GPT-4o insieme a due fonti di conoscenza proprietaria:
+The tender document is extracted and passed to GPT-4o alongside two sources of proprietary context:
 
-**Risk register Inpeco**
-Un registro costruito su misura con showstopper e fattori di rischio specifici per il business: spazio fisico incompatibile, richiesta di automazione blood bank, connettività HIL via laser vision, installazioni brownfield con zero downtime, responsabilità turnkey, scadenze impossibili. Ogni voce include segnali linguistici precisi in italiano, inglese, tedesco e francese — il modello li cerca attivamente nel testo.
+**Company-specific risk register**
+A curated register of evaluation criteria — showstoppers and risk factors — built around Inpeco's specific business constraints and product capabilities. Each entry includes precise linguistic signals in multiple languages that the model actively searches for in the document.
 
-**Knowledge base dalle risposte passate**
-Caricando i documenti con le risposte di Inpeco a gare precedenti, il sistema impara cosa l'azienda sa fare davvero — anche leggendo tra le righe del linguaggio diplomatico. Frasi come *"da confermare in fase di progetto"* o *"compatibile in linea di principio"* vengono riconosciute come segnali di incertezza e pesate di conseguenza nelle analisi future.
+**Institutional memory from past bids**
+Upload Inpeco's written responses to previous tenders. The system reads them to learn what the company can confidently commit to, and to recognise the diplomatic language that often signals real limitations. This knowledge carries forward into every future analysis.
 
-Il risultato è un'analisi che non è generica: conosce il contesto, i limiti reali e la storia dell'azienda.
+The result is an assessment that is not generic: it reflects the company's actual context, history and constraints.
 
 ---
 
 ## Output
 
-Ogni analisi produce:
+Each analysis produces:
 
-- Raccomandazione **Go / No-Go / Go with mitigation** con punteggio e motivazione
-- Elenco showstopper rilevati con evidenza testuale
-- Risk register con probabilità, impatto e score per ogni fattore
-- Requisiti tecnici, commerciali e legali estratti dal documento
-- Milestone e scadenze identificate
-- Report Word formattato, scaricabile
+- **Go / No-Go / Go with mitigation** recommendation with score and rationale
+- Showstoppers identified with textual evidence from the document
+- Weighted risk register with probability, impact and combined score per factor
+- Key technical, commercial and legal requirements extracted
+- Milestones and deadlines identified
+- Formatted Word report, ready to download
 
-Tre livelli di profondità: **Low** (~2 min), **Medium** (~4 min), **High** (~8 min).
+Three depth levels: **Low** (~2 min), **Medium** (~4 min), **High** (~8 min).
 
 ---
 
-## Moduli
+## Modules
 
 | | |
 |---|---|
-| **Analyse Tender** | Upload documento, analisi GPT-4o, report interattivo |
-| **Tender Library** | Storico di tutte le gare analizzate, esportabile CSV |
-| **Risk Factors & Showstoppers** | Gestione del registro — aggiunta tramite linguaggio naturale, nessun JSON |
-| **Past Bid Responses** | Caricamento risposte passate per arricchire la knowledge base |
+| **Analyse Tender** | Upload document, run GPT-4o analysis, view interactive report |
+| **Tender Library** | Full history of analysed tenders, searchable, exportable as CSV |
+| **Risk Factors & Showstoppers** | Manage the evaluation register — add entries in plain language, no JSON |
+| **Past Bid Responses** | Upload past written responses to enrich the knowledge base |
 
 ---
 
 ## Stack
 
 - Python · Streamlit
-- OpenAI GPT-4o (API key propria — nessun dato condiviso con terze parti)
-- PyMuPDF, pdfplumber, python-docx
-- Tutto locale: nessun database, nessun cloud, file su disco
+- OpenAI GPT-4o — bring your own API key, no data shared with third parties
+- PyMuPDF · pdfplumber · python-docx
+- Fully local: no database, no cloud dependency, files on disk
 
 ---
 
-## Avvio
+## Setup
 
 ```bash
 git clone https://github.com/lisaraco94-hub/tender-intake-assistant
@@ -74,11 +74,13 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+Open `http://localhost:8501`, enter your OpenAI API key and upload the first tender.
+
 ---
 
-## Note sul design
+## Design note
 
-Il sistema migliora nel tempo. Ogni risposta passata caricata nella knowledge base affina la capacità di riconoscere pattern — capacità consolidate, aree di incertezza, linguaggio tipico delle situazioni limite. Non è un tool statico: è una base di conoscenza che cresce con l'uso.
+The system improves over time. Each set of past bid responses added to the knowledge base refines the model's ability to distinguish confident commitments from hedged ones — turning institutional experience into a structured analytical asset.
 
 ---
 
