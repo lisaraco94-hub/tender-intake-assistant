@@ -255,9 +255,41 @@ section[data-testid="stSidebar"] {{
     border: 2px solid transparent;
     position: relative;
     overflow: hidden;
-    margin-bottom: 0.6rem;
     min-height: 230px;
     transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
+    pointer-events: none;
+}}
+
+/* ── Home cards clickable overlay ── */
+/* Marker div identifies the home card section */
+.home-cards-marker {{ display: none; }}
+
+/* Column that follows the marker: position relative so button can cover it */
+.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"] {{
+    position: relative;
+    cursor: pointer;
+}}
+/* The button becomes an invisible absolute overlay filling the whole column */
+.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"] .stButton {{
+    position: absolute !important;
+    inset: 0 !important;
+    margin: 0 !important;
+    z-index: 10;
+}}
+.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"] .stButton button {{
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    opacity: 0 !important;
+    cursor: pointer !important;
+}}
+/* Hovering the column (= hovering the invisible button) lifts the card */
+.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"]:hover .feat-card {{
+    transform: translateY(-5px);
+    box-shadow: 0 16px 40px rgba(0,56,101,0.13);
+    border-color: {PRIMARY};
 }}
 .feat-card::before {{
     content: '';
@@ -569,6 +601,10 @@ def view_home():
     """, unsafe_allow_html=True)
 
     lib_count = len(load_library())
+
+    # Invisible marker — CSS uses it to scope the overlay to this section only
+    st.markdown('<div class="home-cards-marker"></div>', unsafe_allow_html=True)
+
     c1, c2, c3 = st.columns(3, gap="large")
 
     with c1:
@@ -577,13 +613,13 @@ def view_home():
           <span class="feat-icon">📋</span>
           <div class="feat-title">Analyse Tender</div>
           <div class="feat-desc">
-            Upload tender documents, run AI analysis, and receive a full pre-bid report
-            with Go/No-Go recommendation, risks, requirements, and milestones.
+            Carica la gara, lancia l'analisi GPT-4o e ricevi il report
+            Go/No-Go con risk register, requisiti e milestone.
           </div>
           <div class="feat-badge">AI · GPT-4o</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open →", key="home_analyze", use_container_width=True, type="primary"):
+        if st.button(" ", key="home_analyze", use_container_width=True):
             st.session_state.view = "analyze"
             st.session_state.run_done = False
             st.rerun()
@@ -594,13 +630,13 @@ def view_home():
           <span class="feat-icon">📚</span>
           <div class="feat-title">Tender Library</div>
           <div class="feat-desc">
-            Browse every analysed tender — date, client, country, verdict, and a
-            one-line summary. Track your history and export as CSV.
+            Storico di tutte le gare analizzate — data, cliente, paese,
+            verdetto e sintesi. Esportabile in CSV.
           </div>
           <div class="feat-badge feat-badge-orange">{lib_count} tender{"s" if lib_count != 1 else ""}</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open →", key="home_library", use_container_width=True, type="primary"):
+        if st.button(" ", key="home_library", use_container_width=True):
             st.session_state.view = "library"
             st.rerun()
 
@@ -610,13 +646,13 @@ def view_home():
           <span class="feat-icon">🧠</span>
           <div class="feat-title">Knowledge Base</div>
           <div class="feat-desc">
-            Upload risks, showstoppers and past bid responses
-            to continuously improve the AI screening accuracy.
+            Gestisci rischi, showstopper e risposte a gare passate
+            per affinare l'analisi nel tempo.
           </div>
-          <div class="feat-badge feat-badge-orange">Configurable</div>
+          <div class="feat-badge feat-badge-orange">Configurabile</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open →", key="home_knowledge", use_container_width=True, type="primary"):
+        if st.button(" ", key="home_knowledge", use_container_width=True):
             st.session_state.view = "knowledge"
             st.rerun()
 
