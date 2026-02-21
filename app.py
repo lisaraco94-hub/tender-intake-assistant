@@ -565,8 +565,8 @@ a.feat-link:hover .feat-card {{
 
 # ─── Shared navbar ────────────────────────────────────────────────
 # Inpeco logo — white SVG on one line (no Markdown code-block issue)
-# Large filled circle + small dot upper-left + "inpeco" bold wordmark
-_INPECO_LOGO_SVG = '<svg height="52" viewBox="0 0 255 52" xmlns="http://www.w3.org/2000/svg"><circle cx="26" cy="33" r="22" fill="white"/><circle cx="8" cy="8" r="7.5" fill="white"/><text x="57" y="44" font-family="Montserrat,Arial,sans-serif" font-weight="900" font-size="34" fill="white">inpeco</text></svg>'
+# Large circle (r=25) fully inside viewBox; small dot upper-left (top y=3 safe)
+_INPECO_LOGO_SVG = '<svg height="68" viewBox="0 0 290 68" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="39" r="25" fill="white"/><circle cx="10" cy="11" r="8" fill="white"/><text x="66" y="57" font-family="Montserrat,Arial,sans-serif" font-weight="900" font-size="41" fill="white">inpeco</text></svg>'
 
 def _nav(view_name: str):
     st.markdown(
