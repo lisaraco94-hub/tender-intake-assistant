@@ -181,14 +181,18 @@ def build_prebid_report(
 
     client = _get_client()
 
-    # Build full text — for very long documents, use chunked approach
+    # Build full text — truncation limit depends on detail level:
+    # Low  → 80k chars  (~60k tokens)  — fast & cheap, good for bulk screening
+    # Medium → 200k chars (~150k tokens) — balanced
+    # High → 400k chars (~300k tokens) — exhaustive, within GPT-4o 128k token window
+    MAX_TEXT = {"Low": 80_000, "Medium": 200_000, "High": 400_000}.get(detail, 200_000)
+
     full_text = extract_raw_text(pages)
     fallback_title, fallback_date = guess_title_and_date(pages)
 
-    # If document is very long, truncate to ~400k chars (well within GPT-4o 128k token window)
-    MAX_TEXT = 400_000
-    if len(full_text) > MAX_TEXT:
-        full_text = full_text[:MAX_TEXT] + "\n\n[Document truncated — first portion analyzed]"
+    truncated = len(full_text) > MAX_TEXT
+    if truncated:
+        full_text = full_text[:MAX_TEXT] + "\n\n[Document truncated — increase detail level for full analysis]"
 
     system_prompt = _build_system_prompt(risk_factors)
     user_prompt = _build_user_prompt(full_text, detail)
@@ -225,6 +229,8 @@ def build_prebid_report(
         ),
         "detail_level": detail,
         "pages_analyzed": len(pages),
+        "chars_analyzed": min(len(extract_raw_text(pages)), MAX_TEXT),
+        "truncated": truncated,
     }
 
     return report
