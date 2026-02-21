@@ -156,9 +156,27 @@ if "detail" not in st.session_state:
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
 
 *, *::before, *::after {{
     font-family: 'Montserrat', sans-serif !important;
+}}
+
+/* ── Ripristina il font icone Streamlit (specificità > * vince su !important) ── */
+[data-testid="stIconMaterial"],
+[data-testid="stIconMaterial"] *,
+[data-baseweb="tab-list"] button > span,
+[data-baseweb="tab-list"] button > p,
+[data-baseweb="tab-list"] button[aria-label] *,
+[data-baseweb="accordion"] [role="button"] > div > span,
+[data-baseweb="accordion"] [role="button"] > div > p,
+summary > div > span:first-child,
+button[aria-label*="arrow"] span,
+button[aria-label*="arrow"] p,
+span.material-symbols-rounded {{
+    font-family: 'Material Symbols Rounded', 'Material Icons', serif !important;
+    font-feature-settings: 'liga' 1;
+    -webkit-font-feature-settings: 'liga' 1;
 }}
 
 .stApp,
