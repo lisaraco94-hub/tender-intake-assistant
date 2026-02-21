@@ -1,137 +1,85 @@
-# Inpeco · Tender Intake Assistant
+# Tender Intake Assistant
 
-> **Un commerciale riceve una gara da 8 milioni di euro. Ha 3 settimane per decidere se partecipare. Normalmente ci vogliono 2-3 giorni di riunioni, email e lettura manuale per capire se vale la pena. Con questo tool: 4 minuti.**
-
----
-
-## Cos'è
-
-Un sistema AI di **pre-screening automatico per gare d'appalto** nel settore della Total Laboratory Automation (TLA) e automazione di laboratorio clinico.
-
-Carica il PDF della gara. In pochi minuti ricevi un report completo con:
-
-- ✅ / ❌ **Raccomandazione Go / No-Go** motivata con punteggio
-- 🚨 **Showstopper rilevati** — ragioni per cui non si dovrebbe nemmeno partecipare
-- ⚠️ **Risk register pesato** — ogni rischio con probabilità, impatto e score combinato
-- 📋 **Requisiti chiave estratti** — tecnici, commerciali, legali
-- 📅 **Milestone e timeline** identificate nel documento
-- 📝 **Report Word scaricabile** pronto per la revisione interna
+Pre-bid screening automatico per gare d'appalto nel settore della Total Laboratory Automation. Carica il documento di gara, ottieni in pochi minuti un'analisi strutturata con raccomandazione Go / No-Go, risk register pesato, requisiti chiave e report Word scaricabile.
 
 ---
 
-## Perché è diverso da "chiedere a ChatGPT"
+## Il problema
 
-ChatGPT non sa chi è Inpeco, cosa sa fare, cosa non sa fare, e non ha memoria delle gare precedenti.
+Valutare se partecipare a una gara richiede ore di lettura, confronto interno e giudizio esperto. Molte gare vengono analizzate e poi abbandonate. Alcune vengono vinte con rischi che non erano stati visti in fase di pre-bid.
 
-Questo sistema è **addestrato sul contesto reale di Inpeco**:
-
-### 1. Register di rischi proprietario
-Il sistema non valuta le gare in modo generico. Usa un registro costruito su misura con showstopper e fattori di rischio specifici per il business di Inpeco: spazio fisico incompatibile, richiesta di automazione blood bank (non ancora disponibile), connettività HIL via laser vision, brownfield con zero downtime, responsabilità turnkey, e molto altro.
-
-Ogni voce ha segnali linguistici precisi — parole e frasi che, se trovate nel documento, triggherano quella regola. Il modello sa cercarle in italiano, inglese, tedesco e francese.
-
-### 2. Impara dalle risposte passate di Inpeco
-Carica nella Knowledge Base i documenti con le **risposte di Inpeco a gare precedenti** (vinte o perse). Il sistema li legge e capisce — anche dal linguaggio diplomatico — cosa Inpeco sa fare davvero e dove ha limitazioni reali.
-
-Frasi come *"da confermare in fase di progetto"*, *"compatibile in linea di principio"*, *"soggetto a sopralluogo"* vengono riconosciute come segnali di incertezza. Il sistema trasferisce questa conoscenza istituzionale nelle analisi future.
-
-### 3. Risk editor in linguaggio naturale
-Aggiungi nuovi rischi o showstopper descrivendo il problema in italiano. L'AI lo struttura automaticamente nel formato corretto e lo aggiunge al registro attivo. Nessun JSON, nessun tecnicismo.
+Questo tool comprime quella prima valutazione da giorni a minuti, senza sacrificare la qualità del giudizio.
 
 ---
 
-## Come funziona — il flusso
+## Come funziona
 
-```
-Gara (PDF/DOCX)
-      │
-      ▼
-  Estrazione testo
-      │
-      ▼
-  GPT-4o analizza contro:
-  ├─ Risk register Inpeco (showstopper + risk factors)
-  └─ Risposte passate di Inpeco (knowledge base)
-      │
-      ▼
-  Report strutturato JSON
-      │
-      ├─ Dashboard interattiva (Streamlit)
-      └─ Export Word (.docx)
-```
+Il documento di gara viene estratto e passato a GPT-4o insieme a due fonti di conoscenza proprietaria:
 
-Tre livelli di profondità analisi:
-- **Low** (~2 min) — solo showstopper, go/no-go rapido
-- **Medium** (~4 min) — risk register completo + requisiti
-- **High** (~8 min) — analisi esaustiva, tutto il dettaglio
+**Risk register Inpeco**
+Un registro costruito su misura con showstopper e fattori di rischio specifici per il business: spazio fisico incompatibile, richiesta di automazione blood bank, connettività HIL via laser vision, installazioni brownfield con zero downtime, responsabilità turnkey, scadenze impossibili. Ogni voce include segnali linguistici precisi in italiano, inglese, tedesco e francese — il modello li cerca attivamente nel testo.
+
+**Knowledge base dalle risposte passate**
+Caricando i documenti con le risposte di Inpeco a gare precedenti, il sistema impara cosa l'azienda sa fare davvero — anche leggendo tra le righe del linguaggio diplomatico. Frasi come *"da confermare in fase di progetto"* o *"compatibile in linea di principio"* vengono riconosciute come segnali di incertezza e pesate di conseguenza nelle analisi future.
+
+Il risultato è un'analisi che non è generica: conosce il contesto, i limiti reali e la storia dell'azienda.
 
 ---
 
-## Funzionalità principali
+## Output
 
-| Modulo | Cosa fa |
+Ogni analisi produce:
+
+- Raccomandazione **Go / No-Go / Go with mitigation** con punteggio e motivazione
+- Elenco showstopper rilevati con evidenza testuale
+- Risk register con probabilità, impatto e score per ogni fattore
+- Requisiti tecnici, commerciali e legali estratti dal documento
+- Milestone e scadenze identificate
+- Report Word formattato, scaricabile
+
+Tre livelli di profondità: **Low** (~2 min), **Medium** (~4 min), **High** (~8 min).
+
+---
+
+## Moduli
+
+| | |
 |---|---|
-| **Analyse Tender** | Carica gara, inserisci API key, lancia analisi GPT-4o |
-| **Tender Library** | Storico di tutte le gare analizzate, filtrabili, esportabili CSV |
-| **Knowledge Base → Risk Factors** | Visualizza, aggiungi (con AI) ed elimina showstopper e risk factors |
-| **Knowledge Base → Past Bid Responses** | Carica risposte Inpeco a gare passate per auto-istruire il sistema |
+| **Analyse Tender** | Upload documento, analisi GPT-4o, report interattivo |
+| **Tender Library** | Storico di tutte le gare analizzate, esportabile CSV |
+| **Risk Factors & Showstoppers** | Gestione del registro — aggiunta tramite linguaggio naturale, nessun JSON |
+| **Past Bid Responses** | Caricamento risposte passate per arricchire la knowledge base |
 
 ---
 
-## Stack tecnico
+## Stack
 
-- **Frontend**: Streamlit (Python) — interfaccia web, zero infrastruttura
-- **AI**: OpenAI GPT-4o via API (chiave API propria, nessun dato inviato a terzi fuori dall'API call)
-- **Estrazione documenti**: PyMuPDF (PDF), python-docx (Word), pdfplumber
-- **Export**: python-docx per report Word formattato
-- **Dati**: tutto locale — nessun database, nessun cloud, file JSON su disco
+- Python · Streamlit
+- OpenAI GPT-4o (API key propria — nessun dato condiviso con terze parti)
+- PyMuPDF, pdfplumber, python-docx
+- Tutto locale: nessun database, nessun cloud, file su disco
 
 ---
 
-## Avvio locale
+## Avvio
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/lisaraco94-hub/tender-intake-assistant
 cd tender-intake-assistant
 
 python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 
 streamlit run app.py
 ```
 
-Apri il browser su `http://localhost:8501`, inserisci la tua API key OpenAI e carica la prima gara.
+---
+
+## Note sul design
+
+Il sistema migliora nel tempo. Ogni risposta passata caricata nella knowledge base affina la capacità di riconoscere pattern — capacità consolidate, aree di incertezza, linguaggio tipico delle situazioni limite. Non è un tool statico: è una base di conoscenza che cresce con l'uso.
 
 ---
 
-## Struttura del progetto
-
-```
-tender-intake-assistant/
-├── app.py                     # App Streamlit — UI e routing
-├── src/
-│   ├── pipeline.py            # Core: prompt GPT-4o, parsing risposta
-│   ├── extractors.py          # Estrazione testo da PDF/DOCX/TXT
-│   └── report_docx.py         # Generazione report Word
-├── assets/
-│   ├── risk_factors.json      # Register showstopper + risk factors Inpeco
-│   ├── tender_library.json    # Storico gare analizzate
-│   └── knowledge/
-│       └── responses/         # Risposte Inpeco a gare passate
-└── requirements.txt
-```
-
----
-
-## Il vero valore
-
-Ogni gara a cui Inpeco risponde richiede ore di lavoro di persone qualificate per capire se vale la pena partecipare. Molte gare vengono analizzate e poi abbandonate. Alcune vengono vinte ma avevano rischi non visti in fase di pre-bid.
-
-Questo tool non sostituisce il giudizio umano — lo potenzia. Dà al commerciale e al bid team un **punto di partenza strutturato e oggettivo in 4 minuti**, basato sulla conoscenza reale di Inpeco, non su valutazioni generiche.
-
-Col tempo, più risposte passate vengono caricate nella knowledge base, più il sistema diventa preciso. È un loop virtuoso: ogni gara analizzata migliora la capacità di analizzare le prossime.
-
----
-
-**→ [Apri l'app](https://share.streamlit.io)** *(link aggiornato al deploy)*
+[github.com/lisaraco94-hub/tender-intake-assistant](https://github.com/lisaraco94-hub/tender-intake-assistant)
