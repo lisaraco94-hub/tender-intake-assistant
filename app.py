@@ -336,15 +336,15 @@ section[data-testid="stSidebar"] {{
     color: {ORANGE};
 }}
 
-/* ── Section headings ── */
+/* ── Section headings (on cyan background) ── */
 .section-heading {{
-    font-size: 1.05rem;
+    font-size: 1rem;
     font-weight: 700;
-    color: {NAVY};
-    border-left: 4px solid {PRIMARY};
+    color: white;
+    border-left: 3px solid rgba(255,255,255,0.35);
     padding-left: 0.75rem;
-    margin: 1.6rem 0 1rem;
-    letter-spacing: 0.01em;
+    margin: 1.8rem 0 0.8rem;
+    letter-spacing: 0.02em;
 }}
 .section-heading-orange {{
     border-left-color: {ORANGE};
@@ -448,47 +448,50 @@ section[data-testid="stSidebar"] {{
 .badge-mit  {{ background: #fef0c7; color: #a06000; }}
 .badge-nogo {{ background: #fde8e8; color: #c0392b; }}
 
-/* ── Info / warn boxes ── */
+/* ── Inline notes (plain text, no boxes) ── */
 .info-box {{
-    background: linear-gradient(135deg, #e8f4fb, #f0f7fb);
-    border-left: 3px solid {PRIMARY};
-    border-radius: 8px;
-    padding: 0.8rem 1rem;
-    font-size: 0.8rem;
-    color: #2a4a62;
-    margin: 0.5rem 0;
-    line-height: 1.65;
+    font-size: 0.83rem;
+    color: rgba(255,255,255,0.72);
+    margin: 0.2rem 0 1rem;
+    line-height: 1.75;
 }}
 .warn-box {{
-    background: #fff8e6;
-    border-left: 3px solid {ORANGE};
-    border-radius: 8px;
-    padding: 0.8rem 1rem;
-    font-size: 0.8rem;
-    color: #7a5200;
-    margin: 0.5rem 0;
+    font-size: 0.83rem;
+    color: rgba(255,255,255,0.88);
+    margin: 0.4rem 0 0.8rem;
+    line-height: 1.6;
 }}
 .trunc-warn {{
-    background: #fff8e6;
-    border-left: 3px solid {ORANGE};
-    border-radius: 4px;
-    padding: 0.4rem 0.8rem;
-    font-size: 0.78rem;
-    color: #7a5200;
-    margin-bottom: 0.6rem;
+    font-size: 0.79rem;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 0.5rem;
 }}
 
 /* ── File tags ── */
 .file-tag {{
     display: inline-block;
-    background: #e8f4fb;
-    border: 1px solid {PRIMARY};
+    background: rgba(255,255,255,0.88);
     border-radius: 20px;
     padding: 0.2rem 0.72rem;
     font-size: 0.72rem;
     color: {NAVY};
     margin: 0.15rem 0.2rem;
     font-weight: 500;
+}}
+
+/* ── Widget labels and captions on cyan ── */
+.stCaption p {{
+    color: rgba(255,255,255,0.6) !important;
+}}
+[data-testid="stTextInput"] label,
+[data-testid="stTextArea"] label,
+[data-testid="stSelectSlider"] label,
+[data-testid="stFileUploader"] label,
+[data-testid="stFileUploader"] span,
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] p,
+[data-testid="stSelectbox"] label {{
+    color: rgba(255,255,255,0.82) !important;
 }}
 
 /* ── Metric containers ── */
@@ -646,10 +649,10 @@ def view_home():
           <span class="feat-icon">🧠</span>
           <div class="feat-title">Knowledge Base</div>
           <div class="feat-desc">
-            Gestisci rischi, showstopper e risposte a gare passate
-            per affinare l'analisi nel tempo.
+            Manage evaluation rules and past bid responses
+            to improve analysis accuracy over time.
           </div>
-          <div class="feat-badge feat-badge-orange">Configurabile</div>
+          <div class="feat-badge feat-badge-orange">Configurable</div>
         </div>
         """, unsafe_allow_html=True)
         if st.button(" ", key="home_knowledge", use_container_width=True):
@@ -658,11 +661,9 @@ def view_home():
 
     # Footer bar
     st.markdown(f"""
-    <div style="text-align:center;margin-top:3rem;padding:1.5rem;border-top:1px solid #dde8f0;">
-      <span style="font-size:0.72rem;color:#a0b8cc;letter-spacing:0.04em;">
+    <div style="text-align:center;margin-top:3rem;padding:1.5rem;border-top:1px solid rgba(255,255,255,0.15);">
+      <span style="font-size:0.72rem;color:rgba(255,255,255,0.45);letter-spacing:0.04em;">
         INPECO · Tender Intake Assistant · Powered by GPT-4o
-        &nbsp;·&nbsp;
-        <span style="color:{ORANGE};">●</span>&nbsp;Active
       </span>
     </div>
     """, unsafe_allow_html=True)
@@ -682,12 +683,6 @@ def view_analyze():
     col_key, col_depth = st.columns([3, 1], gap="large")
     with col_key:
         if not api_key:
-            st.markdown(
-                '<div class="warn-box" style="margin-bottom:0.4rem;">'
-                '🔑 <b>OpenAI API Key required</b> — enter it below to run the analysis.'
-                '</div>',
-                unsafe_allow_html=True,
-            )
             api_key = st.text_input(
                 "OpenAI API Key",
                 type="password",
@@ -699,10 +694,7 @@ def view_analyze():
                 st.rerun()
         else:
             st.markdown(
-                '<div style="background:rgba(255,255,255,0.18);border-radius:8px;'
-                'padding:0.55rem 1rem;font-size:0.82rem;color:white;">'
-                '🔑 API Key attiva ✓'
-                '</div>',
+                '<p style="color:rgba(255,255,255,0.75);font-size:0.82rem;margin:0.6rem 0;">🔑 API key active</p>',
                 unsafe_allow_html=True,
             )
     with col_depth:
@@ -713,9 +705,9 @@ def view_analyze():
         )
         st.session_state.detail = detail
         st.caption({
-            "Low":    "~1–2 min · solo showstopper",
-            "Medium": "~2–4 min · rischi + requisiti",
-            "High":   "~4–8 min · analisi completa",
+            "Low":    "~1–2 min · showstoppers only",
+            "Medium": "~2–4 min · risks + requirements",
+            "High":   "~4–8 min · full analysis",
         }[detail])
 
     # Sidebar (still available for advanced users)
@@ -769,7 +761,7 @@ def view_analyze():
         can_run = bool(os.environ.get("OPENAI_API_KEY", ""))
         if not can_run:
             st.markdown(
-                '<div class="warn-box">⚠️ Enter your OpenAI API key in the sidebar to run analysis.</div>',
+                '<p style="color:rgba(255,255,255,0.75);font-size:0.82rem;">Enter your OpenAI API key above to run the analysis.</p>',
                 unsafe_allow_html=True,
             )
 
@@ -914,13 +906,6 @@ def view_knowledge():
         st.rerun()
 
     st.markdown('<div class="section-heading">Knowledge Base</div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="info-box">
-      Enrich the assistant's analysis by uploading your own risk factors, showstoppers,
-      and past tender examples. The more context you provide, the more accurate
-      the screening results will be.
-    </div>
-    """, unsafe_allow_html=True)
 
     tab1, tab2 = st.tabs([
         "📁  Risk Factors & Showstoppers",
@@ -930,18 +915,16 @@ def view_knowledge():
     with tab1:
         can_add = bool(os.environ.get("OPENAI_API_KEY", ""))
 
-        # ── Add a new risk/showstopper with AI ──────────────────────
-        st.markdown('<div class="section-heading">Add Risk or Showstopper with AI</div>', unsafe_allow_html=True)
-        st.markdown("""
-        <div class="info-box">
-          Describe a risk or showstopper in plain language — the AI will structure it
-          automatically and add it to the active register. No JSON knowledge required.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="section-heading">Add entry with AI</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="info-box">Describe a new risk or showstopper in plain language. '
+            'The AI will structure it and add it to the active register.</p>',
+            unsafe_allow_html=True,
+        )
 
         if not can_add:
             st.markdown(
-                '<div class="warn-box">⚠️ Enter your OpenAI API key in the Analyse Tender sidebar first.</div>',
+                '<p class="warn-box">API key required — enter it in the Analyse Tender page first.</p>',
                 unsafe_allow_html=True,
             )
 
@@ -1013,20 +996,15 @@ def view_knowledge():
 
     with tab2:
         st.markdown('<div class="section-heading">Past Bid Responses</div>', unsafe_allow_html=True)
-        st.markdown("""
-        <div class="info-box">
-          <b>Carica qui i documenti con le risposte di Inpeco a gare passate</b> — file che contengono
-          domande della stazione appaltante e le risposte di Inpeco.<br><br>
-          Il sistema legge queste risposte per capire <em>cosa Inpeco sa fare davvero</em>:
-          individua le risposte decise (capacità consolidate) e il linguaggio diplomatico che
-          segnala limitazioni reali — frasi come <em>"da confermare in fase di progetto"</em>,
-          <em>"compatibile in linea di principio"</em>, <em>"soggetto a sopralluogo"</em>.<br><br>
-          Questi file vengono caricati automaticamente in ogni nuova analisi.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            '<p class="info-box">Upload documents containing Inpeco\'s written responses to past tenders — '
+            'the AI reads them to understand real capabilities and identify patterns in how limitations '
+            'are expressed. These files are automatically included in every new analysis.</p>',
+            unsafe_allow_html=True,
+        )
 
         resp_ups = st.file_uploader(
-            "Carica documenti risposta (PDF, DOCX, TXT…)",
+            "Upload response documents (PDF, DOCX, TXT…)",
             type=sorted(SUPPORTED_EXTENSIONS),
             accept_multiple_files=True,
             key="kb_responses",
@@ -1037,23 +1015,22 @@ def view_knowledge():
             for f in resp_ups:
                 with open(os.path.join(resp_dir, f.name), "wb") as out:
                     out.write(f.getvalue())
-            st.success(f"{len(resp_ups)} file/i aggiunto/i alla knowledge base.")
+            st.success(f"{len(resp_ups)} file(s) added to the knowledge base.")
 
         if os.path.exists(resp_dir) and os.listdir(resp_dir):
             files = sorted(os.listdir(resp_dir))
-            st.markdown(f"**Documenti caricati ({len(files)}):**")
+            st.caption(f"{len(files)} document(s) stored")
             for fn in files:
                 c_fn, c_del = st.columns([10, 1])
-                c_fn.markdown(f"- `{fn}`")
-                if c_del.button("🗑", key=f"del_resp_{fn}", help="Rimuovi"):
+                c_fn.markdown(f"`{fn}`")
+                if c_del.button("🗑", key=f"del_resp_{fn}", help="Remove"):
                     os.remove(os.path.join(resp_dir, fn))
                     st.rerun()
         else:
             st.markdown("""
             <div class="empty-state">
               <div class="empty-icon">📂</div>
-              <div class="empty-msg">Nessun documento caricato ancora.<br>
-              Carica le risposte di Inpeco a gare passate per arricchire l'analisi.</div>
+              <div class="empty-msg">No documents uploaded yet.</div>
             </div>
             """, unsafe_allow_html=True)
 
