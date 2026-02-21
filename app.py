@@ -144,6 +144,13 @@ def _ai_format_risk(concept: str, entry_type: str, rf: dict) -> dict:
     return json.loads(resp.choices[0].message.content)
 
 
+# ─── Query-param card navigation ─────────────────────────────────
+_qp = st.query_params.get("nav", "")
+if _qp in ("analyze", "library", "knowledge"):
+    st.query_params.clear()
+    st.session_state.view = _qp
+    st.rerun()
+
 # ─── Session state ────────────────────────────────────────────────
 if "view" not in st.session_state:
     st.session_state.view = "home"
@@ -246,6 +253,11 @@ section[data-testid="stSidebar"] {{
 }}
 
 /* ── Feature cards ── */
+a.feat-link {{
+    text-decoration: none;
+    display: block;
+    margin-bottom: 0.6rem;
+}}
 .feat-card {{
     background: {WHITE};
     border-radius: 18px;
@@ -257,36 +269,8 @@ section[data-testid="stSidebar"] {{
     overflow: hidden;
     min-height: 230px;
     transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
-    pointer-events: none;
 }}
-
-/* ── Home cards clickable overlay ── */
-/* Marker div identifies the home card section */
-.home-cards-marker {{ display: none; }}
-
-/* Column that follows the marker: position relative so button can cover it */
-.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"] {{
-    position: relative;
-    cursor: pointer;
-}}
-/* The button becomes an invisible absolute overlay filling the whole column */
-.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"] .stButton {{
-    position: absolute !important;
-    inset: 0 !important;
-    margin: 0 !important;
-    z-index: 10;
-}}
-.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"] .stButton button {{
-    width: 100% !important;
-    height: 100% !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    opacity: 0 !important;
-    cursor: pointer !important;
-}}
-/* Hovering the column (= hovering the invisible button) lifts the card */
-.element-container:has(.home-cards-marker) + .element-container [data-testid="stColumn"]:hover .feat-card {{
+a.feat-link:hover .feat-card {{
     transform: translateY(-5px);
     box-shadow: 0 16px 40px rgba(0,56,101,0.13);
     border-color: {PRIMARY};
@@ -604,60 +588,52 @@ def view_home():
     """, unsafe_allow_html=True)
 
     lib_count = len(load_library())
-
-    # Invisible marker — CSS uses it to scope the overlay to this section only
-    st.markdown('<div class="home-cards-marker"></div>', unsafe_allow_html=True)
-
     c1, c2, c3 = st.columns(3, gap="large")
 
     with c1:
         st.markdown("""
-        <div class="feat-card">
-          <span class="feat-icon">📋</span>
-          <div class="feat-title">Analyse Tender</div>
-          <div class="feat-desc">
-            Carica la gara, lancia l'analisi GPT-4o e ricevi il report
-            Go/No-Go con risk register, requisiti e milestone.
+        <a class="feat-link" href="?nav=analyze">
+          <div class="feat-card">
+            <span class="feat-icon">📋</span>
+            <div class="feat-title">Analyse Tender</div>
+            <div class="feat-desc">
+              Upload a tender document, run AI analysis and receive a full
+              Go/No-Go report with risk register, requirements and milestones.
+            </div>
+            <div class="feat-badge">AI · GPT-4o</div>
           </div>
-          <div class="feat-badge">AI · GPT-4o</div>
-        </div>
+        </a>
         """, unsafe_allow_html=True)
-        if st.button(" ", key="home_analyze", use_container_width=True):
-            st.session_state.view = "analyze"
-            st.session_state.run_done = False
-            st.rerun()
 
     with c2:
         st.markdown(f"""
-        <div class="feat-card">
-          <span class="feat-icon">📚</span>
-          <div class="feat-title">Tender Library</div>
-          <div class="feat-desc">
-            Storico di tutte le gare analizzate — data, cliente, paese,
-            verdetto e sintesi. Esportabile in CSV.
+        <a class="feat-link" href="?nav=library">
+          <div class="feat-card">
+            <span class="feat-icon">📚</span>
+            <div class="feat-title">Tender Library</div>
+            <div class="feat-desc">
+              Browse all analysed tenders — date, client, country, verdict
+              and summary. Searchable and exportable as CSV.
+            </div>
+            <div class="feat-badge feat-badge-orange">{lib_count} tender{"s" if lib_count != 1 else ""}</div>
           </div>
-          <div class="feat-badge feat-badge-orange">{lib_count} tender{"s" if lib_count != 1 else ""}</div>
-        </div>
+        </a>
         """, unsafe_allow_html=True)
-        if st.button(" ", key="home_library", use_container_width=True):
-            st.session_state.view = "library"
-            st.rerun()
 
     with c3:
         st.markdown("""
-        <div class="feat-card">
-          <span class="feat-icon">🧠</span>
-          <div class="feat-title">Knowledge Base</div>
-          <div class="feat-desc">
-            Manage evaluation rules and past bid responses
-            to improve analysis accuracy over time.
+        <a class="feat-link" href="?nav=knowledge">
+          <div class="feat-card">
+            <span class="feat-icon">🧠</span>
+            <div class="feat-title">Knowledge Base</div>
+            <div class="feat-desc">
+              Manage evaluation rules and past bid responses
+              to improve analysis accuracy over time.
+            </div>
+            <div class="feat-badge feat-badge-orange">Configurable</div>
           </div>
-          <div class="feat-badge feat-badge-orange">Configurable</div>
-        </div>
+        </a>
         """, unsafe_allow_html=True)
-        if st.button(" ", key="home_knowledge", use_container_width=True):
-            st.session_state.view = "knowledge"
-            st.rerun()
 
     # Footer bar
     st.markdown(f"""
@@ -1062,23 +1038,24 @@ def _render_report(report: dict):
     </div>
     """, unsafe_allow_html=True)
 
-    # Key metrics
+    # ── Key metrics ────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Tender type",  (report.get("tender_type") or "—").upper())
     c2.metric("Deadline",      report.get("submission_deadline") or "—")
     c3.metric("Est. value",    report.get("estimated_value_eur") or "—")
     c4.metric("Authority",    (report.get("contracting_authority") or "—")[:30])
 
-    # Executive summary
+    # ── Executive Summary ──────────────────────────────────────────
     st.markdown('<div class="section-heading">Executive Summary</div>', unsafe_allow_html=True)
     for line in report.get("executive_summary", []):
         st.markdown(f"- {line}")
 
-    # Showstoppers
+    # ── Go / No-Go verdict ─────────────────────────────────────────
+    # (already rendered above as banner — showstoppers follow immediately)
     showstoppers = report.get("showstoppers", [])
     if showstoppers:
         st.markdown(
-            f'<div class="section-heading section-heading-orange">🚨 Showstoppers ({len(showstoppers)})</div>',
+            f'<div class="section-heading section-heading-orange">Showstoppers ({len(showstoppers)})</div>',
             unsafe_allow_html=True,
         )
         for ss in showstoppers:
@@ -1089,58 +1066,52 @@ def _render_report(report: dict):
   <div class="ss-evidence">Evidence: {ss.get("evidence", "—")} · Impact: {ss.get("impact", "—")}</div>
 </div>""", unsafe_allow_html=True)
 
-    # Tabbed detail
-    risks        = report.get("risks", [])
-    reqs         = report.get("requirements", {})
-    deadlines    = report.get("deadlines", [])
-    deliverables = report.get("deliverables", [])
-    open_qs      = report.get("open_questions", [])
-
-    t_risk, t_req, t_mile, t_del, t_q = st.tabs([
-        f"Risks ({len(risks)})",
-        "Requirements",
-        f"Milestones ({len(deadlines)})",
-        f"Deliverables ({len(deliverables)})",
-        f"Open Questions ({len(open_qs)})",
-    ])
-
-    with t_risk:
-        if risks:
-            df = pd.DataFrame(risks)
-            ordered = [c for c in ["id","risk","category","probability","impact","score","evidence","mitigation"] if c in df.columns]
-            st.dataframe(df[ordered].sort_values("score", ascending=False), use_container_width=True, hide_index=True)
-        else:
-            st.info("No risks identified.")
-
-    with t_req:
-        if reqs:
-            sub = st.tabs([k.replace("_", " ").title() for k in reqs])
-            for tab, (key, items) in zip(sub, reqs.items()):
-                with tab:
-                    for item in (items or []):
-                        st.markdown(f"- {item}")
-                    if not items:
-                        st.caption("Nothing detected.")
-        else:
-            st.info("No requirements extracted.")
-
-    with t_mile:
-        for d in (deadlines or []):
+    # ── Key Deadlines & Milestones ─────────────────────────────────
+    deadlines = report.get("deadlines", [])
+    st.markdown('<div class="section-heading">Key Deadlines & Milestones</div>', unsafe_allow_html=True)
+    if deadlines:
+        for d in deadlines:
             st.markdown(f"- **{d.get('when','?')}** — {d.get('milestone','')}  \n  *{d.get('evidence','')}*")
-        if not deadlines:
-            st.info("No milestones detected.")
+    else:
+        st.markdown('<p class="info-box">No specific dates identified in the document.</p>', unsafe_allow_html=True)
 
-    with t_del:
-        for item in (deliverables or []):
+    # ── Requirements ───────────────────────────────────────────────
+    reqs = report.get("requirements", {})
+    st.markdown('<div class="section-heading">Requirements & Constraints</div>', unsafe_allow_html=True)
+    if reqs:
+        for key, items in reqs.items():
+            if items:
+                st.markdown(f"**{key.replace('_', ' ').title()}**")
+                for item in items:
+                    st.markdown(f"- {item}")
+    else:
+        st.markdown('<p class="info-box">No requirements extracted.</p>', unsafe_allow_html=True)
+
+    # ── Deliverables ───────────────────────────────────────────────
+    deliverables = report.get("deliverables", [])
+    st.markdown('<div class="section-heading">Deliverables to Prepare</div>', unsafe_allow_html=True)
+    if deliverables:
+        for item in deliverables:
             st.markdown(f"- {item}")
-        if not deliverables:
-            st.info("No deliverables listed.")
+    else:
+        st.markdown('<p class="info-box">No deliverables listed.</p>', unsafe_allow_html=True)
 
-    with t_q:
-        for q in (open_qs or []):
+    # ── Risk Register ──────────────────────────────────────────────
+    risks = report.get("risks", [])
+    st.markdown('<div class="section-heading">Risk Register</div>', unsafe_allow_html=True)
+    if risks:
+        df = pd.DataFrame(risks)
+        ordered = [c for c in ["id","risk","category","probability","impact","score","evidence","mitigation"] if c in df.columns]
+        st.dataframe(df[ordered].sort_values("score", ascending=False), use_container_width=True, hide_index=True)
+    else:
+        st.markdown('<p class="info-box">No risks identified.</p>', unsafe_allow_html=True)
+
+    # ── Open Questions ─────────────────────────────────────────────
+    open_qs = report.get("open_questions", [])
+    if open_qs:
+        st.markdown('<div class="section-heading">Open Questions</div>', unsafe_allow_html=True)
+        for q in open_qs:
             st.markdown(f"- {q}")
-        if not open_qs:
-            st.info("No open questions flagged.")
 
     # Download + API usage
     st.divider()
