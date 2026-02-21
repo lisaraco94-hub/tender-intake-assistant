@@ -50,6 +50,98 @@ def save_to_library(entry: dict):
         json.dump(lib, f, ensure_ascii=False, indent=2)
 
 
+RISK_FACTORS_PATH = "assets/risk_factors.json"
+
+
+def save_risk_factors(rf: dict):
+    with open(RISK_FACTORS_PATH, "w", encoding="utf-8") as f:
+        json.dump(rf, f, ensure_ascii=False, indent=2)
+
+
+def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 36_000) -> str:
+    """Load text from past bid response documents (won and lost) stored in the knowledge base."""
+    parts = []
+    total = 0
+    for folder, label in [
+        ("won",  "WON TENDER — Inpeco's Response"),
+        ("lost", "LOST TENDER — Inpeco's Response"),
+    ]:
+        folder_path = f"assets/knowledge/{folder}"
+        if not os.path.exists(folder_path):
+            continue
+        for fn in sorted(os.listdir(folder_path)):
+            if total >= max_total:
+                break
+            fp = os.path.join(folder_path, fn)
+            try:
+                with open(fp, "rb") as f:
+                    file_bytes = f.read()
+                pages = extract_from_file(file_bytes, fn)
+                text = "\n".join(pages)[:max_chars_per_file]
+                parts.append(f"=== {label}: {fn} ===\n{text}")
+                total += len(text)
+            except Exception:
+                pass
+    return "\n\n".join(parts)
+
+
+def _ai_format_risk(concept: str, entry_type: str, rf: dict) -> dict:
+    """Convert a plain-language risk description into a structured JSON entry using GPT-4o."""
+    from openai import OpenAI
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+
+    if entry_type == "showstopper":
+        existing = rf.get("risk_register", {}).get("showstoppers", [])
+        prefix = "SS"
+    else:
+        existing = rf.get("risk_register", {}).get("risk_factors", [])
+        prefix = "HR"
+
+    max_n = 0
+    for e in existing:
+        try:
+            max_n = max(max_n, int(e.get("id", "0").split("-")[-1]))
+        except Exception:
+            pass
+    next_id = f"{prefix}-{max_n + 1:02d}"
+
+    if entry_type == "showstopper":
+        schema = (
+            f'{{"id": "{next_id}", "name": "short name (max 8 words)", '
+            '"description": "clear explanation of why this is a showstopper", '
+            '"signals": ["keyword or phrase 1", "keyword or phrase 2", "keyword or phrase 3"]}}'
+        )
+        context = "This is a SHOWSTOPPER — a reason to immediately decline to bid."
+    else:
+        schema = (
+            f'{{"id": "{next_id}", "name": "short name (max 8 words)", '
+            '"description": "clear explanation of the risk", '
+            '"signals": ["signal phrase 1", "signal phrase 2"], '
+            '"category": "e.g. Technical / Commercial / Legal / Operational", '
+            '"probability": 3, "impact": 3}}'
+        )
+        context = "This is a HIGH RISK factor — something that significantly complicates the bid."
+
+    resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    f"You are a tender risk analyst for Inpeco (Total Laboratory Automation supplier). "
+                    f"{context} "
+                    f"Convert the user's plain-text description into a structured entry. "
+                    f"Return ONLY valid JSON exactly matching this schema: {schema}"
+                ),
+            },
+            {"role": "user", "content": concept},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.2,
+    )
+    return json.loads(resp.choices[0].message.content)
+
+
 # ─── Session state ────────────────────────────────────────────────
 if "view" not in st.session_state:
     st.session_state.view = "home"
@@ -640,9 +732,26 @@ def view_analyze():
                     all_pages.append(f"=== FILE: {uf.name} ===")
                     all_pages.extend(pages)
 
-            with st.spinner(f"Analysing {len(uploaded_files)} file(s) with GPT-4o [{detail}]…"):
+            knowledge_ctx = _load_knowledge_context()
+            n_kb = len([
+                fn
+                for folder in ("assets/knowledge/won", "assets/knowledge/lost")
+                if os.path.exists(folder)
+                for fn in os.listdir(folder)
+            ])
+            spinner_msg = (
+                f"Analysing {len(uploaded_files)} file(s) with GPT-4o [{detail}]"
+                + (f" · {n_kb} past bid doc(s) loaded" if n_kb else "")
+                + "…"
+            )
+            with st.spinner(spinner_msg):
                 try:
-                    report = build_prebid_report(all_pages, risk_factors=risk_factors, detail=detail)
+                    report = build_prebid_report(
+                        all_pages,
+                        risk_factors=risk_factors,
+                        detail=detail,
+                        knowledge_context=knowledge_ctx,
+                    )
                     st.session_state.report = report
                     st.session_state.run_done = True
 
@@ -771,49 +880,122 @@ def view_knowledge():
     ])
 
     with tab1:
-        st.markdown("**Replace the active risk register**")
-        st.markdown(
-            '<div class="info-box">Upload a <code>risk_factors.json</code> following the same schema '
-            "as the default file. It becomes the active register for all future analyses.</div>",
-            unsafe_allow_html=True,
-        )
-        rf_up = st.file_uploader("Upload risk_factors.json", type=["json"], key="kb_rf")
-        if rf_up:
-            try:
-                data = json.loads(rf_up.read().decode("utf-8"))
-                with open("assets/risk_factors.json", "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                n_ss = len(data.get("showstoppers", []) or data.get("risk_register", {}).get("showstoppers", []))
-                n_rf = len(data.get("risk_factors", []) or data.get("risk_register", {}).get("risk_factors", []))
-                st.success(f"Risk register updated — {n_ss} showstoppers, {n_rf} risk factors.")
-            except Exception as e:
-                st.error(f"Error: {e}")
+        can_add = bool(os.environ.get("OPENAI_API_KEY", ""))
 
-        # Show current register
+        # ── Add a new risk/showstopper with AI ──────────────────────
+        st.markdown('<div class="section-heading">Add Risk or Showstopper with AI</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="info-box">
+          Describe a risk or showstopper in plain language — the AI will structure it
+          automatically and add it to the active register. No JSON knowledge required.
+        </div>
+        """, unsafe_allow_html=True)
+
+        if not can_add:
+            st.markdown(
+                '<div class="warn-box">⚠️ Enter your OpenAI API key in the Analyse Tender sidebar first.</div>',
+                unsafe_allow_html=True,
+            )
+
+        entry_type = st.radio(
+            "Type to add",
+            ["Showstopper (reason to decline immediately)", "Risk factor (something that complicates the bid)"],
+            horizontal=True,
+            key="kb_entry_type",
+        )
+        is_ss = entry_type.startswith("Showstopper")
+
+        concept = st.text_area(
+            "Describe the risk in plain language",
+            placeholder=(
+                "e.g. Sometimes the tender requires a connection to a specific middleware brand "
+                "that we have never integrated before and the timeline is too short to develop it."
+                if not is_ss else
+                "e.g. The tender specifies that the system must be the same brand currently installed "
+                "in their lab, which is a competitor."
+            ),
+            height=100,
+            key="kb_concept",
+        )
+
+        if st.button("✨ Add with AI", disabled=(not can_add or not concept.strip()), type="primary", key="kb_add_ai"):
+            with st.spinner("AI is structuring the entry…"):
+                try:
+                    rf = load_risk_factors()
+                    new_entry = _ai_format_risk(concept.strip(), "showstopper" if is_ss else "risk_factor", rf)
+                    rr = rf.setdefault("risk_register", {})
+                    if is_ss:
+                        rr.setdefault("showstoppers", []).append(new_entry)
+                    else:
+                        rr.setdefault("risk_factors", []).append(new_entry)
+                    save_risk_factors(rf)
+                    st.success(f"Added **{new_entry.get('id')} — {new_entry.get('name')}**")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+        # ── Current register ─────────────────────────────────────────
+        st.markdown('<div class="section-heading" style="margin-top:2rem;">Active Risk Register</div>', unsafe_allow_html=True)
         try:
             rf = load_risk_factors()
-            ss_list = rf.get("showstoppers") or rf.get("risk_register", {}).get("showstoppers", [])
-            rf_list = rf.get("risk_factors") or rf.get("risk_register", {}).get("risk_factors", [])
-            st.caption(f"Active register: {len(ss_list or [])} showstoppers · {len(rf_list or [])} risk factors")
-            with st.expander("View showstoppers"):
-                for ss in (ss_list or []):
-                    st.markdown(f"- **{ss.get('id','')}** — {ss.get('description','')}")
-            with st.expander("View risk factors"):
-                for r in (rf_list or []):
-                    st.markdown(f"- **{r.get('id','')}** — {r.get('description','')}")
-        except Exception:
-            pass
+            ss_list = rf.get("risk_register", {}).get("showstoppers") or rf.get("showstoppers", [])
+            rf_list = rf.get("risk_register", {}).get("risk_factors") or rf.get("risk_factors", [])
+
+            st.caption(f"{len(ss_list or [])} showstoppers · {len(rf_list or [])} risk factors")
+
+            with st.expander(f"🚨 Showstoppers ({len(ss_list or [])})"):
+                for i, ss in enumerate(ss_list or []):
+                    c_txt, c_del = st.columns([10, 1])
+                    c_txt.markdown(f"**{ss.get('id','')}** — {ss.get('name','')}  \n*{ss.get('description','')}*")
+                    if c_del.button("🗑", key=f"del_ss_{i}", help="Remove"):
+                        rf["risk_register"]["showstoppers"].pop(i)
+                        save_risk_factors(rf)
+                        st.rerun()
+
+            with st.expander(f"⚠️ Risk factors ({len(rf_list or [])})"):
+                for i, r in enumerate(rf_list or []):
+                    c_txt, c_del = st.columns([10, 1])
+                    c_txt.markdown(f"**{r.get('id','')}** — {r.get('name','')}  \n*{r.get('description','')}*")
+                    if c_del.button("🗑", key=f"del_rf_{i}", help="Remove"):
+                        rf["risk_register"]["risk_factors"].pop(i)
+                        save_risk_factors(rf)
+                        st.rerun()
+        except Exception as e:
+            st.warning(f"Could not load risk register: {e}")
+
+        # ── Advanced: replace entire register via JSON upload ────────
+        with st.expander("Advanced: replace entire register via JSON upload"):
+            rf_up = st.file_uploader("Upload risk_factors.json", type=["json"], key="kb_rf")
+            if rf_up:
+                try:
+                    data = json.loads(rf_up.read().decode("utf-8"))
+                    save_risk_factors(data)
+                    n_ss = len(data.get("showstoppers", []) or data.get("risk_register", {}).get("showstoppers", []))
+                    n_rf = len(data.get("risk_factors", []) or data.get("risk_register", {}).get("risk_factors", []))
+                    st.success(f"Risk register replaced — {n_ss} showstoppers, {n_rf} risk factors.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
     with tab2:
-        st.markdown("**Upload won tender documents**")
-        st.markdown(
-            '<div class="info-box">These help calibrate what a successful bid looks like '
-            "and can be used as reference for future AI analyses.</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="section-heading">Won Tenders — Inpeco\'s Bid Responses</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="info-box">
+          <b>Upload Inpeco's written responses / technical offers for tenders you WON.</b><br><br>
+          The AI reads these to learn <em>what Inpeco successfully committed to</em> — proven capabilities,
+          typical delivery timelines, commercial terms that worked, and the language used when confident.
+          These documents are automatically included in every future analysis.
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        <div class="warn-box">
+          📌 <b>Upload Inpeco's response document</b>, not the original tender.
+          The response is what reveals your real capabilities and commitments.
+        </div>
+        """, unsafe_allow_html=True)
         won_ups = st.file_uploader(
-            "Upload files",
-            type=sorted(SUPPORTED_EXTENSIONS) + ["json"],
+            "Upload Inpeco response documents (PDF, DOCX, TXT…)",
+            type=sorted(SUPPORTED_EXTENSIONS),
             accept_multiple_files=True,
             key="kb_won",
         )
@@ -822,24 +1004,46 @@ def view_knowledge():
             for f in won_ups:
                 with open(f"assets/knowledge/won/{f.name}", "wb") as out:
                     out.write(f.getvalue())
-            st.success(f"{len(won_ups)} file(s) saved to knowledge base.")
+            st.success(f"{len(won_ups)} file(s) added to Won knowledge base.")
         won_dir = "assets/knowledge/won"
         if os.path.exists(won_dir) and os.listdir(won_dir):
             files = sorted(os.listdir(won_dir))
-            st.markdown(f"**Stored ({len(files)} files):**")
+            st.markdown(f"**Stored ({len(files)} response document(s)):**")
             for fn in files:
-                st.markdown(f"- `{fn}`")
+                c_fn, c_del = st.columns([10, 1])
+                c_fn.markdown(f"- `{fn}`")
+                if c_del.button("🗑", key=f"del_won_{fn}", help="Remove"):
+                    os.remove(os.path.join(won_dir, fn))
+                    st.rerun()
+        else:
+            st.markdown("""
+            <div class="empty-state">
+              <div class="empty-icon">📂</div>
+              <div class="empty-msg">No won-tender responses uploaded yet.</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     with tab3:
-        st.markdown("**Upload lost tender documents**")
-        st.markdown(
-            '<div class="info-box">Understanding why bids failed helps identify new showstoppers '
-            "and risk patterns for future analyses.</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="section-heading">Lost Tenders — Inpeco\'s Bid Responses</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="info-box">
+          <b>Upload Inpeco's written responses / technical offers for tenders you LOST.</b><br><br>
+          The AI looks for the soft or hedged language that often signals real limitations —
+          phrases like <em>"subject to site survey"</em>, <em>"to be confirmed at kick-off"</em>,
+          <em>"in principle compatible"</em>. These patterns reveal where Inpeco struggles even
+          when the response appears compliant on the surface.
+          These documents are automatically included in every future analysis.
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        <div class="warn-box">
+          📌 <b>Upload Inpeco's response document</b>, not the original tender.
+          The response — with its diplomatic wording — is what exposes the real gaps.
+        </div>
+        """, unsafe_allow_html=True)
         lost_ups = st.file_uploader(
-            "Upload files",
-            type=sorted(SUPPORTED_EXTENSIONS) + ["json"],
+            "Upload Inpeco response documents (PDF, DOCX, TXT…)",
+            type=sorted(SUPPORTED_EXTENSIONS),
             accept_multiple_files=True,
             key="kb_lost",
         )
@@ -848,13 +1052,24 @@ def view_knowledge():
             for f in lost_ups:
                 with open(f"assets/knowledge/lost/{f.name}", "wb") as out:
                     out.write(f.getvalue())
-            st.success(f"{len(lost_ups)} file(s) saved to knowledge base.")
+            st.success(f"{len(lost_ups)} file(s) added to Lost knowledge base.")
         lost_dir = "assets/knowledge/lost"
         if os.path.exists(lost_dir) and os.listdir(lost_dir):
             files = sorted(os.listdir(lost_dir))
-            st.markdown(f"**Stored ({len(files)} files):**")
+            st.markdown(f"**Stored ({len(files)} response document(s)):**")
             for fn in files:
-                st.markdown(f"- `{fn}`")
+                c_fn, c_del = st.columns([10, 1])
+                c_fn.markdown(f"- `{fn}`")
+                if c_del.button("🗑", key=f"del_lost_{fn}", help="Remove"):
+                    os.remove(os.path.join(lost_dir, fn))
+                    st.rerun()
+        else:
+            st.markdown("""
+            <div class="empty-state">
+              <div class="empty-icon">📂</div>
+              <div class="empty-msg">No lost-tender responses uploaded yet.</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 
 # ─── REPORT RENDERER ──────────────────────────────────────────────

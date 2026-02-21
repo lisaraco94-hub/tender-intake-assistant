@@ -46,8 +46,28 @@ def load_risk_factors(path: str = "assets/risk_factors.json") -> Dict[str, Any]:
 
 # ─── AI prompt builder ────────────────────────────────────────────
 
-def _build_system_prompt(risk_factors: Dict[str, Any]) -> str:
+def _build_system_prompt(risk_factors: Dict[str, Any], knowledge_context: str = "") -> str:
     company = risk_factors.get("company_profile", {})
+
+    knowledge_section = ""
+    if knowledge_context.strip():
+        knowledge_section = f"""
+
+PAST BID EXPERIENCE — INPECO'S OWN RESPONSES:
+The following excerpts are from Inpeco's actual written responses to past tenders (won and lost).
+Read them carefully and use them to:
+1. Understand Inpeco's REAL capabilities vs theoretical ones — what was actually committed vs hedged
+2. Spot soft/diplomatic language that reveals true limitations:
+   e.g. "subject to site survey", "to be evaluated case by case", "in principle compatible",
+   "we propose to assess during project kick-off", "subject to final confirmation"
+3. Flag if this new tender requires capabilities that Inpeco struggled with in past responses
+4. Reference these institutional patterns when rating risks and writing the rationale
+
+{knowledge_context}
+
+END OF PAST BID EXPERIENCE
+"""
+
     return f"""You are an expert pre-bid tender analyst for {company.get("name", "the company")}.
 
 COMPANY PROFILE:
@@ -67,7 +87,7 @@ RISK REGISTER TO APPLY:
 
 TENDER TYPE CONTEXT:
 {json.dumps(risk_factors.get("tender_type_guidance", {}), indent=2, ensure_ascii=False)}
-
+{knowledge_section}
 RESPONSE FORMAT:
 You MUST respond with a valid JSON object. No markdown, no explanation outside JSON.
 Use exactly this structure:
@@ -163,6 +183,7 @@ def build_prebid_report(
     pages: List[str],
     risk_factors: Dict[str, Any] | None = None,
     detail: str = "Medium",
+    knowledge_context: str = "",
 ) -> Dict[str, Any]:
     """
     Main entry point. Analyzes a tender document using GPT-4o and returns
@@ -194,7 +215,7 @@ def build_prebid_report(
     if truncated:
         full_text = full_text[:MAX_TEXT] + "\n\n[Document truncated — increase detail level for full analysis]"
 
-    system_prompt = _build_system_prompt(risk_factors)
+    system_prompt = _build_system_prompt(risk_factors, knowledge_context)
     user_prompt = _build_user_prompt(full_text, detail)
 
     response = client.chat.completions.create(
