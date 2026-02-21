@@ -171,72 +171,28 @@ st.markdown(f"""
 
 /* ── Navbar ── */
 .top-nav {{
-    background: {NAVY};
-    padding: 0.85rem 2.5rem;
+    background: {PRIMARY};
+    padding: 1rem 2.5rem;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    border-radius: 0 0 14px 14px;
+    justify-content: flex-start;
+    border-radius: 0 0 16px 16px;
     margin-bottom: 2rem;
-    box-shadow: 0 4px 24px rgba(0,56,101,0.2);
+    box-shadow: 0 4px 28px rgba(0,174,239,0.28);
 }}
-.nav-brand {{
+.nav-logo-block {{
     display: flex;
-    align-items: center;
-    gap: 1rem;
-}}
-.nav-wordmark {{
-    font-size: 1.75rem;
-    font-weight: 900;
-    color: {PRIMARY};
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    line-height: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.18rem;
 }}
 .nav-tagline {{
-    font-size: 0.58rem;
-    color: rgba(255,255,255,0.42);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-top: 0.18rem;
-}}
-.nav-sep {{
-    width: 1.5px;
-    height: 2.2rem;
-    background: rgba(255,255,255,0.15);
-    border-radius: 2px;
-}}
-.nav-app {{
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: rgba(255,255,255,0.72);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-}}
-.nav-label {{
-    font-size: 0.77rem;
-    font-weight: 600;
-    color: rgba(255,255,255,0.78);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    background: rgba(255,255,255,0.09);
-    padding: 0.28rem 1rem;
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.14);
-}}
-.nav-dot {{
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    background: {ORANGE};
-    border-radius: 50%;
-    margin-right: 0.45rem;
-    vertical-align: middle;
-    animation: blink 2s ease-in-out infinite;
-}}
-@keyframes blink {{
-    0%, 100% {{ opacity: 1; }}
-    50%       {{ opacity: 0.3; }}
+    font-size: 0.72rem;
+    font-weight: 300;
+    color: rgba(255,255,255,0.88);
+    letter-spacing: 0.04em;
+    text-transform: none;
+    margin-top: 0;
 }}
 
 /* ── Hero ── */
@@ -542,26 +498,32 @@ st.markdown(f"""
 
 
 # ─── Shared navbar ────────────────────────────────────────────────
+# Inpeco logo — white SVG (sphere mark + wordmark)
+_INPECO_LOGO_SVG = """
+<svg height="38" viewBox="0 0 230 38" xmlns="http://www.w3.org/2000/svg" fill="none" aria-label="Inpeco">
+  <!-- Sphere mark: outer ring -->
+  <circle cx="19" cy="19" r="17.5" stroke="white" stroke-width="2.2"/>
+  <!-- Sphere mark: vertical ellipse (longitude) -->
+  <ellipse cx="19" cy="19" rx="8.2" ry="17.5" stroke="white" stroke-width="1.6"/>
+  <!-- Sphere mark: horizontal equator -->
+  <line x1="1.5" y1="19" x2="36.5" y2="19" stroke="white" stroke-width="1.6"/>
+  <!-- "inpeco" wordmark — Montserrat bold, white -->
+  <text x="47" y="27.5"
+        font-family="Montserrat, Arial, sans-serif"
+        font-weight="800"
+        font-size="24"
+        fill="white"
+        letter-spacing="0.5">inpeco</text>
+</svg>
+"""
+
 def _nav(view_name: str):
-    labels = {
-        "home":      "Tender Intake Assistant",
-        "analyze":   "Analyse Tender",
-        "library":   "Tender Library",
-        "knowledge": "Knowledge Base",
-    }
-    label = labels.get(view_name, "")
-    dot   = '<span class="nav-dot"></span>' if view_name != "home" else ""
     st.markdown(f"""
     <div class="top-nav">
-      <div class="nav-brand">
-        <div>
-          <div class="nav-wordmark">INPECO</div>
-          <div class="nav-tagline">Total Laboratory Automation</div>
-        </div>
-        <div class="nav-sep"></div>
-        <div class="nav-app">Tender Intake</div>
+      <div class="nav-logo-block">
+        {_INPECO_LOGO_SVG}
+        <div class="nav-tagline">Creating a healthier tomorrow, today</div>
       </div>
-      <div class="nav-label">{dot}{label}</div>
     </div>
     """, unsafe_allow_html=True)
 
