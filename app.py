@@ -402,7 +402,7 @@ a.feat-link:hover .feat-card {{
 }}
 .ss-evidence {{
     font-size: 0.78rem;
-    color: rgba(255,255,255,0.68);
+    color: rgba(255,255,255,0.85);
     line-height: 1.5;
 }}
 
@@ -470,17 +470,21 @@ a.feat-link:hover .feat-card {{
 
 /* ── Widget labels and captions on cyan ── */
 .stCaption p {{
-    color: rgba(255,255,255,0.6) !important;
+    color: rgba(255,255,255,0.82) !important;
 }}
 [data-testid="stTextInput"] label,
 [data-testid="stTextArea"] label,
 [data-testid="stSelectSlider"] label,
 [data-testid="stFileUploader"] label,
-[data-testid="stFileUploader"] span,
-[data-testid="stRadio"] label,
-[data-testid="stRadio"] p,
 [data-testid="stSelectbox"] label {{
     color: rgba(255,255,255,0.82) !important;
+}}
+/* Keep drop zone inner text dark (it sits on a white box) */
+[data-testid="stFileDropzone"] span,
+[data-testid="stFileDropzone"] small,
+[data-testid="stFileDropzone"] p,
+[data-testid="stFileDropzone"] > div {{
+    color: #2a4a6a !important;
 }}
 
 /* ── Metric containers ── */
@@ -558,7 +562,74 @@ a.feat-link:hover .feat-card {{
     padding: 3.5rem 2rem;
 }}
 .empty-icon {{ font-size: 3rem; }}
-.empty-msg  {{ font-size: 0.9rem; color: #8aa5c0; margin-top: 0.8rem; line-height: 1.7; }}
+.empty-msg  {{ font-size: 0.9rem; color: rgba(255,255,255,0.88); margin-top: 0.8rem; line-height: 1.7; }}
+
+/* ── Analysis depth: radio → visual intensity ramp blocks ── */
+.depth-label {{
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.88);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 0.3rem;
+}}
+[data-testid="stRadio"] [role="radiogroup"] {{
+    display: flex !important;
+    gap: 0.4rem !important;
+    margin-top: 0.2rem !important;
+}}
+[data-testid="stRadio"] [role="radiogroup"] > label {{
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    padding: 0.55rem 0.3rem 0.45rem !important;
+    border-radius: 8px !important;
+    background: rgba(255,255,255,0.1) !important;
+    border: 2px solid rgba(255,255,255,0.18) !important;
+    cursor: pointer !important;
+    transition: border-color 0.15s, background 0.15s !important;
+    gap: 0.35rem !important;
+    min-height: 0 !important;
+}}
+/* Hide the circular radio indicator */
+[data-testid="stRadio"] [role="radiogroup"] > label [data-baseweb="radio"] {{
+    display: none !important;
+}}
+[data-testid="stRadio"] [role="radiogroup"] > label p {{
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    color: rgba(255,255,255,0.92) !important;
+    margin: 0 !important;
+    line-height: 1 !important;
+}}
+/* Intensity bar via ::before — grows taller for each level */
+[data-testid="stRadio"] [role="radiogroup"] > label::before {{
+    content: '' !important;
+    display: block !important;
+    width: 100% !important;
+    border-radius: 3px !important;
+    flex-shrink: 0 !important;
+}}
+[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(1)::before {{
+    height: 4px !important;
+    background: rgba(255,255,255,0.45) !important;
+}}
+[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(2)::before {{
+    height: 8px !important;
+    background: {ORANGE} !important;
+}}
+[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(3)::before {{
+    height: 13px !important;
+    background: linear-gradient(135deg, {ORANGE} 0%, #e74c3c 100%) !important;
+}}
+/* Selected block highlight */
+[data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) {{
+    border-color: rgba(255,255,255,0.75) !important;
+    background: rgba(255,255,255,0.22) !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -679,10 +750,13 @@ def view_analyze():
                 unsafe_allow_html=True,
             )
     with col_depth:
-        detail = st.select_slider(
-            "Analysis depth",
+        st.markdown('<div class="depth-label">Analysis depth</div>', unsafe_allow_html=True)
+        detail = st.radio(
+            "depth_sel",
             options=["Low", "Medium", "High"],
-            value=st.session_state.detail,
+            index=["Low", "Medium", "High"].index(st.session_state.detail),
+            horizontal=True,
+            label_visibility="collapsed",
         )
         st.session_state.detail = detail
         st.caption({
