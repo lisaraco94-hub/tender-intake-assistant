@@ -110,11 +110,21 @@ Analyze the tender document provided and produce a structured pre-bid screening 
 Focus on identifying SHOWSTOPPERS (reasons to immediately decline), HIGH RISKS, and MEDIUM RISKS
 based on the company risk register provided.
 
+TENDER TYPE CLASSIFICATION — READ CAREFULLY:
+- "bundle": The tender lot includes BOTH the automation system AND the supply of analyzers and/or
+  reagents as a single integrated procurement. Inpeco must act as prime contractor responsible for
+  the full solution including third-party IVD instruments.
+  Example signals: "fornitura di analizzatori", "supply of analyzers included", "all-in-one tender",
+  "automation + diagnostic instruments", reagents in the same lot.
+- "unbundle": The tender covers ONLY the automation/pre-analytical track. Analyzers already belong
+  to the hospital or are procured via a separate parallel tender. The automation must connect to
+  specific existing/future analyzers but does NOT include supplying them.
+  Example signals: "automazione da collegare agli analizzatori presenti", "connectivity to existing
+  instruments", "track only", "pre-analytics only", analyzers listed only as connectivity targets.
+- "unknown": Insufficient information in the document to determine type.
+
 RISK REGISTER TO APPLY:
 {json.dumps(risk_factors.get("risk_register", {}), indent=2, ensure_ascii=False)}
-
-TENDER TYPE CONTEXT:
-{json.dumps(risk_factors.get("tender_type_guidance", {}), indent=2, ensure_ascii=False)}
 {knowledge_section}
 RESPONSE FORMAT:
 You MUST respond with a valid JSON object. No markdown, no explanation outside JSON.
@@ -125,7 +135,7 @@ Use exactly this structure:
   "tender_date": "string or empty",
   "tender_reference": "string or empty",
   "contracting_authority": "string",
-  "city": "string (city where contracting authority is located, search context clues, or empty)",
+  "city": "string (city where contracting authority is located, or empty)",
   "country": "string (country, e.g. Italy, France, or empty)",
   "tender_type": "bundle | unbundle | unknown",
   "estimated_value_eur": "string or empty",
@@ -158,15 +168,15 @@ Use exactly this structure:
     }}
   ],
   "requirements": {{
-    "scope_and_responsibility": ["string"],
-    "space_and_facility": ["string"],
-    "analyzer_connectivity": ["string"],
-    "it_and_middleware": ["string"],
-    "schedule_and_milestones": ["string"],
-    "qualification_and_compliance": ["string"],
-    "commercial_conditions": ["string"]
+    "scope_and_responsibility": ["EXHAUSTIVE list — extract EVERY explicit scope item: what is included, what is excluded, who is responsible for civil works, electrical, pneumatic, dismantling, training, go-live support. Quote the document where relevant."],
+    "space_and_facility": ["EXHAUSTIVE list — extract ALL spatial constraints: room dimensions, available m², floor load, ceiling height, door widths, number of floors/buildings involved, available electrical power, compressed air availability, HVAC requirements."],
+    "analyzer_connectivity": ["EXHAUSTIVE list — name EVERY analyzer/instrument mentioned with brand and model if stated. Distinguish between analyzers to be connected (unbundle) vs supplied (bundle). Note specialties: clinical chemistry, immunoassay, hematology, coagulation, urinalysis, microbiology, molecular, blood gas, etc."],
+    "it_and_middleware": ["EXHAUSTIVE list — LIS/HIS name and version if stated, HL7/ASTM/FHIR requirements, cybersecurity requirements, GDPR obligations, remote access requirements, server supply obligations, network requirements."],
+    "schedule_and_milestones": ["EXHAUSTIVE list — ALL dates and timelines: contract signature, site survey, delivery, installation start/end, go-live, acceptance testing, warranty period start/end. Include phased rollout if present."],
+    "qualification_and_compliance": ["EXHAUSTIVE list — ALL certifications, regulatory approvals, standards required: CE marking, ISO standards (9001/13485/27001/62443), local ministry approvals, IQ/OQ/PQ validation, accreditation requirements (ISO 15189, CAP), GMP requirements."],
+    "commercial_conditions": ["EXHAUSTIVE list — payment terms, penalty/liquidated damages clauses (amount and trigger), performance bonds, bank guarantees, warranty duration, SLA uptime % required, spare parts obligations, insurance requirements, exclusivity clauses."]
   }},
-  "deliverables": ["string"],
+  "deliverables": ["EXHAUSTIVE list — list EVERY document, report, plan, certificate, training session, and formal deliverable explicitly requested in the tender. Include: technical offer, pricing schedule, compliance matrix, project plan, site survey report, FAT/SAT protocols, installation report, training plan, O&M manuals, validation documentation, as-built drawings, etc."],
   "open_questions": ["string"],
   "deadlines": [
     {{
@@ -183,13 +193,14 @@ SCORING RULES:
   - Low risk  → score 15–35
   - Medium risk → score 40–65
   - High risk → score 70–90
-- document_ref: always specify document name (if multiple files), page number, and section/paragraph
+- document_ref: always specify document name (if multiple files uploaded), page number, and section/paragraph
 - Go/No-Go logic:
   - Any showstopper present → NO-GO
   - Any High risk OR average risk score >= 55 → GO with Mitigation
   - Otherwise → GO
 - go_nogo score: 0-100 representing overall bid feasibility (100=fully feasible, 0=completely infeasible)
-- city and country: extract from document context (letterhead, address, jurisdiction clauses); if not explicit, infer from language, law references, or institution names
+- city and country: extract from letterhead, address, jurisdiction clauses, applicable law; if not explicit, infer from document language, institution name, or regulatory references
+- requirements and deliverables: BE EXHAUSTIVE — do not summarize or truncate. Every item explicitly mentioned in the tender must appear.
 """
 
 
