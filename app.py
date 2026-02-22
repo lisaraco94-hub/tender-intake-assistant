@@ -188,6 +188,11 @@ span.material-symbols-rounded {{
     -webkit-font-feature-settings: 'liga' 1;
 }}
 
+/* Hide Streamlit's native header bar (replaced by our custom nav) */
+header[data-testid="stHeader"] {{
+    display: none !important;
+}}
+
 .stApp,
 [data-testid="stAppViewContainer"],
 [data-testid="stMainBlockContainer"],
@@ -282,6 +287,8 @@ a.feat-link {{
     position: relative;
     overflow: hidden;
     flex: 1;
+    display: flex;
+    flex-direction: column;
     transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
 }}
 a.feat-link:hover .feat-card {{
@@ -325,7 +332,8 @@ a.feat-link:hover .feat-card {{
     font-weight: 700;
     padding: 0.2rem 0.7rem;
     border-radius: 20px;
-    margin-top: 0.9rem;
+    margin-top: auto;
+    align-self: center;
     letter-spacing: 0.05em;
     text-transform: uppercase;
 }}
@@ -564,7 +572,7 @@ a.feat-link:hover .feat-card {{
 .empty-icon {{ font-size: 3rem; }}
 .empty-msg  {{ font-size: 0.9rem; color: rgba(255,255,255,0.88); margin-top: 0.8rem; line-height: 1.7; }}
 
-/* ── Analysis depth: radio → visual intensity ramp blocks ── */
+/* ── Analysis depth: scoped intensity blocks (marker = .depth-widget-marker) ── */
 .depth-label {{
     font-size: 0.75rem;
     font-weight: 600;
@@ -573,62 +581,131 @@ a.feat-link:hover .feat-card {{
     letter-spacing: 0.07em;
     margin-bottom: 0.3rem;
 }}
-[data-testid="stRadio"] [role="radiogroup"] {{
+/* Scope via sibling of the marker container */
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] {{
     display: flex !important;
-    gap: 0.4rem !important;
+    flex-direction: row !important;
+    gap: 0.45rem !important;
     margin-top: 0.2rem !important;
 }}
-[data-testid="stRadio"] [role="radiogroup"] > label {{
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label {{
     flex: 1 !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
-    padding: 0.55rem 0.3rem 0.45rem !important;
+    padding: 0.55rem 0.5rem 0.45rem !important;
     border-radius: 8px !important;
     background: rgba(255,255,255,0.1) !important;
     border: 2px solid rgba(255,255,255,0.18) !important;
     cursor: pointer !important;
     transition: border-color 0.15s, background 0.15s !important;
-    gap: 0.35rem !important;
-    min-height: 0 !important;
+    gap: 0.32rem !important;
+    white-space: nowrap !important;
 }}
-/* Hide the circular radio indicator */
-[data-testid="stRadio"] [role="radiogroup"] > label [data-baseweb="radio"] {{
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label [data-baseweb="radio"] {{
     display: none !important;
 }}
-[data-testid="stRadio"] [role="radiogroup"] > label p {{
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label p {{
     font-size: 0.72rem !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
+    letter-spacing: 0.07em !important;
     color: rgba(255,255,255,0.92) !important;
     margin: 0 !important;
-    line-height: 1 !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
 }}
-/* Intensity bar via ::before — grows taller for each level */
-[data-testid="stRadio"] [role="radiogroup"] > label::before {{
+/* Intensity bars: low=light orange, medium=orange, high=dark red */
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label::before {{
     content: '' !important;
     display: block !important;
     width: 100% !important;
     border-radius: 3px !important;
     flex-shrink: 0 !important;
 }}
-[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(1)::before {{
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label:nth-child(1)::before {{
     height: 4px !important;
-    background: rgba(255,255,255,0.45) !important;
+    background: rgba(247,148,29,0.45) !important;
 }}
-[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(2)::before {{
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label:nth-child(2)::before {{
     height: 8px !important;
     background: {ORANGE} !important;
 }}
-[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(3)::before {{
-    height: 13px !important;
-    background: linear-gradient(135deg, {ORANGE} 0%, #e74c3c 100%) !important;
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label:nth-child(3)::before {{
+    height: 12px !important;
+    background: linear-gradient(135deg, {ORANGE} 0%, #c0392b 100%) !important;
 }}
-/* Selected block highlight */
-[data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) {{
+/* Selected: highlight border + filled navy dot below text */
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) {{
     border-color: rgba(255,255,255,0.75) !important;
     background: rgba(255,255,255,0.22) !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label::after {{
+    content: '' !important;
+    display: block !important;
+    width: 7px !important;
+    height: 7px !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    flex-shrink: 0 !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.depth-widget-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked)::after {{
+    background: {NAVY} !important;
+}}
+
+/* ── KB type selector: vertical checklist (marker = .kb-type-marker) ── */
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [data-testid="stWidgetLabel"] {{
+    display: none !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [role="radiogroup"] {{
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.35rem !important;
+    margin-top: 0.3rem !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label {{
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.65rem !important;
+    padding: 0.55rem 0.9rem !important;
+    border-radius: 8px !important;
+    background: rgba(255,255,255,0.08) !important;
+    border: 1.5px solid rgba(255,255,255,0.15) !important;
+    cursor: pointer !important;
+    transition: background 0.15s, border-color 0.15s !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label [data-baseweb="radio"] {{
+    display: none !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label p {{
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: rgba(255,255,255,0.92) !important;
+    margin: 0 !important;
+    line-height: 1.2 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+}}
+/* Circle indicator via ::before */
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label::before {{
+    content: '' !important;
+    display: block !important;
+    width: 14px !important;
+    height: 14px !important;
+    border-radius: 50% !important;
+    border: 2px solid rgba(255,255,255,0.45) !important;
+    background: transparent !important;
+    flex-shrink: 0 !important;
+    transition: background 0.15s, border-color 0.15s !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked)::before {{
+    border-color: white !important;
+    background: white !important;
+}}
+[data-testid="stMarkdownContainer"]:has(.kb-type-marker) ~ [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) {{
+    background: rgba(255,255,255,0.18) !important;
+    border-color: rgba(255,255,255,0.5) !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -732,7 +809,7 @@ def view_analyze():
 
     # ── API key + depth — visible in main area ──────────────────────
     api_key = os.environ.get("OPENAI_API_KEY", "")
-    col_key, col_depth = st.columns([3, 1], gap="large")
+    col_key, col_depth = st.columns([3, 2], gap="large")
     with col_key:
         if not api_key:
             api_key = st.text_input(
@@ -750,7 +827,7 @@ def view_analyze():
                 unsafe_allow_html=True,
             )
     with col_depth:
-        st.markdown('<div class="depth-label">Analysis depth</div>', unsafe_allow_html=True)
+        st.markdown('<div class="depth-widget-marker"><div class="depth-label">Analysis depth</div></div>', unsafe_allow_html=True)
         detail = st.radio(
             "depth_sel",
             options=["Low", "Medium", "High"],
@@ -983,13 +1060,15 @@ def view_knowledge():
                 unsafe_allow_html=True,
             )
 
+        st.markdown('<div class="kb-type-marker"></div><p style="font-size:0.8rem;color:rgba(255,255,255,0.88);font-weight:600;margin:0.6rem 0 0.1rem;">Choose what to add:</p>', unsafe_allow_html=True)
         entry_type = st.radio(
-            "Type to add",
-            ["Showstopper (reason to decline immediately)", "Risk factor (something that complicates the bid)"],
-            horizontal=True,
+            "Choose what to add:",
+            ["Showstopper", "Risk / Complexity Factor"],
+            horizontal=False,
+            label_visibility="collapsed",
             key="kb_entry_type",
         )
-        is_ss = entry_type.startswith("Showstopper")
+        is_ss = entry_type == "Showstopper"
 
         concept = st.text_area(
             "Describe the risk in plain language",
