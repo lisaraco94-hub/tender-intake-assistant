@@ -59,6 +59,28 @@ def save_risk_factors(rf: dict):
         json.dump(rf, f, ensure_ascii=False, indent=2)
 
 
+def _migrate_risk_register(rf: dict) -> tuple[dict, bool]:
+    """
+    One-time migration: flatten legacy high_risks / medium_risks into a single
+    risk_factors list with level + score fields. Returns (rf, was_migrated).
+    """
+    rr = rf.get("risk_register", {})
+    migrated = False
+    if "high_risks" in rr or "medium_risks" in rr:
+        unified = rr.setdefault("risk_factors", [])
+        for item in rr.pop("high_risks", []):
+            item.setdefault("level", "High")
+            item.setdefault("score", 75)
+            unified.append(item)
+        for item in rr.pop("medium_risks", []):
+            item.setdefault("level", "Medium")
+            item.setdefault("score", 50)
+            unified.append(item)
+        rf["risk_register"] = rr
+        migrated = True
+    return rf, migrated
+
+
 def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 36_000) -> str:
     """Load text from past bid response documents stored in the knowledge base."""
     parts = []
@@ -330,11 +352,21 @@ section[data-testid="stSidebar"] {{
     line-height: 1.75;
 }}
 
-/* ── Feature cards ── */
+/* ── Feature cards — equal-height columns ── */
 [data-testid="stHorizontalBlock"] {{
     align-items: stretch !important;
 }}
 [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+    display: flex !important;
+    flex-direction: column !important;
+}}
+/* Stretch every intermediate wrapper inside the column */
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > div,
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > div > div,
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] [data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] [data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] [data-testid="stMarkdownContainer"] {{
+    flex: 1 !important;
     display: flex !important;
     flex-direction: column !important;
 }}
@@ -1366,6 +1398,7 @@ def view_knowledge():
             with st.spinner("AI is structuring the entry…"):
                 try:
                     rf = load_risk_factors()
+                    rf, _ = _migrate_risk_register(rf)  # ensure unified structure
                     new_entry = _ai_format_risk(
                         concept.strip(),
                         "showstopper" if is_ss else "risk_factor",
@@ -1388,25 +1421,36 @@ def view_knowledge():
         st.markdown('<div class="section-heading" style="margin-top:2rem;">Active Risk Register</div>', unsafe_allow_html=True)
         try:
             rf = load_risk_factors()
-            ss_list = rf.get("risk_register", {}).get("showstoppers") or rf.get("showstoppers", [])
-            rf_list = rf.get("risk_register", {}).get("risk_factors") or rf.get("risk_factors", [])
+            # Migrate high_risks/medium_risks → unified risk_factors (one-time, then saved)
+            rf, was_migrated = _migrate_risk_register(rf)
+            if was_migrated:
+                save_risk_factors(rf)
+                st.toast("Risk register migrated to new format ✓", icon="✅")
 
-            st.caption(f"{len(ss_list or [])} showstoppers · {len(rf_list or [])} risk factors")
+            rr = rf.get("risk_register", {})
+            ss_list = rr.get("showstoppers", [])
+            rf_list = rr.get("risk_factors", [])
 
-            with st.expander(f"🚨 Showstoppers ({len(ss_list or [])})"):
-                for i, ss in enumerate(ss_list or []):
+            st.caption(f"{len(ss_list)} showstoppers · {len(rf_list)} risk factors")
+
+            with st.expander(f"🚨 Showstoppers ({len(ss_list)})"):
+                if not ss_list:
+                    st.markdown('<p style="color:rgba(255,255,255,0.65);font-size:0.82rem;">No showstoppers defined yet.</p>', unsafe_allow_html=True)
+                for i, ss in enumerate(ss_list):
                     c_txt, c_del = st.columns([10, 1])
                     c_txt.markdown(f"**{ss.get('id','')}** — {ss.get('name','')}  \n*{ss.get('description','')}*")
                     if c_del.button("🗑", key=f"del_ss_{i}", help="Remove"):
-                        rf["risk_register"]["showstoppers"].pop(i)
+                        rr["showstoppers"].pop(i)
                         save_risk_factors(rf)
                         st.rerun()
 
-            with st.expander(f"⚠️ Risk factors ({len(rf_list or [])})"):
-                for i, r in enumerate(rf_list or []):
+            lvl_icons = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}
+            with st.expander(f"⚠️ Risk factors ({len(rf_list)})"):
+                if not rf_list:
+                    st.markdown('<p style="color:rgba(255,255,255,0.65);font-size:0.82rem;">No risk factors defined yet.</p>', unsafe_allow_html=True)
+                for i, r in enumerate(rf_list):
                     c_txt, c_del = st.columns([10, 1])
                     lvl = r.get("level", "")
-                    lvl_icons = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}
                     lvl_tag = f" {lvl_icons.get(lvl,'')} {lvl}" if lvl else ""
                     score_tag = f" · Score: {r.get('score','?')}" if r.get("score") is not None else ""
                     c_txt.markdown(
@@ -1414,7 +1458,7 @@ def view_knowledge():
                         f"*{r.get('description','')}*"
                     )
                     if c_del.button("🗑", key=f"del_rf_{i}", help="Remove"):
-                        rf["risk_register"]["risk_factors"].pop(i)
+                        rr["risk_factors"].pop(i)
                         save_risk_factors(rf)
                         st.rerun()
         except Exception as e:
