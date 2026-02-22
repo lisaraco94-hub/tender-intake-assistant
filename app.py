@@ -3,6 +3,7 @@ Tender Intake Assistant — Pre-Bid Screening
 AI-powered analysis for TLA/IVD clinical laboratory tenders.
 """
 
+import inspect
 import json
 import os
 from datetime import datetime
@@ -936,14 +937,15 @@ def view_analyze():
             )
             with st.spinner(spinner_msg):
                 try:
-                    try:
+                    _sig = inspect.signature(build_prebid_report)
+                    if "knowledge_context" in _sig.parameters:
                         report = build_prebid_report(
                             all_pages,
                             risk_factors=risk_factors,
                             detail=detail,
                             knowledge_context=knowledge_ctx,
                         )
-                    except TypeError:
+                    else:
                         # Older pipeline.py without knowledge_context param —
                         # prepend context as the first page so it's still analysed.
                         pages_with_ctx = (
