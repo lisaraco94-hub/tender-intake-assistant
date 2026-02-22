@@ -237,13 +237,11 @@ def build_prebid_report(
 
     client = _get_client()
 
-    # Build full text — truncation limit depends on detail level.
-    # Conservative defaults to stay within 30k TPM tiers; auto-retries
-    # will halve further if the request is still too large.
-    # Low  → 40k chars  (~10k tokens)  — safe for 30k TPM
-    # Medium → 80k chars (~20k tokens)  — balanced
-    # High → 120k chars (~30k tokens)  — detailed, fits 128k context
-    MAX_TEXT = {"Low": 40_000, "Medium": 80_000, "High": 120_000}.get(detail, 80_000)
+    # Build full text — truncation limit depends on detail level:
+    # Low  → 80k chars  (~20k tokens)  — fast & cheap, good for bulk screening
+    # Medium → 200k chars (~50k tokens) — balanced
+    # High → 400k chars (~100k tokens) — exhaustive, fits GPT-4o 128k context
+    MAX_TEXT = {"Low": 80_000, "Medium": 200_000, "High": 400_000}.get(detail, 200_000)
 
     full_text = extract_raw_text(pages)
     fallback_title, fallback_date = guess_title_and_date(pages)
