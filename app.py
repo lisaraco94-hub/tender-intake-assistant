@@ -88,7 +88,7 @@ def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 3
     return "\n\n".join(parts)
 
 
-def _ai_format_risk(concept: str, entry_type: str, rf: dict) -> dict:
+def _ai_format_risk(concept: str, entry_type: str, rf: dict, level: str = "Medium") -> dict:
     """Convert a plain-language risk description into a structured JSON entry using GPT-4o."""
     from openai import OpenAI
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
@@ -98,7 +98,7 @@ def _ai_format_risk(concept: str, entry_type: str, rf: dict) -> dict:
         prefix = "SS"
     else:
         existing = rf.get("risk_register", {}).get("risk_factors", [])
-        prefix = "HR"
+        prefix = "RF"
 
     max_n = 0
     for e in existing:
@@ -107,6 +107,8 @@ def _ai_format_risk(concept: str, entry_type: str, rf: dict) -> dict:
         except Exception:
             pass
     next_id = f"{prefix}-{max_n + 1:02d}"
+
+    level_score = {"Low": 25, "Medium": 50, "High": 75}.get(level, 50)
 
     if entry_type == "showstopper":
         schema = (
@@ -120,10 +122,11 @@ def _ai_format_risk(concept: str, entry_type: str, rf: dict) -> dict:
             f'{{"id": "{next_id}", "name": "short name (max 8 words)", '
             '"description": "clear explanation of the risk", '
             '"signals": ["signal phrase 1", "signal phrase 2"], '
-            '"category": "e.g. Technical / Commercial / Legal / Operational", '
-            '"probability": 3, "impact": 3}}'
+            f'"category": "e.g. Technical / Commercial / Legal / Operational", '
+            f'"level": "{level}", '
+            f'"score": {level_score}}}'
         )
-        context = "This is a HIGH RISK factor — something that significantly complicates the bid."
+        context = f"This is a {level.upper()} RISK factor."
 
     resp = client.chat.completions.create(
         model="gpt-4o",
@@ -143,6 +146,70 @@ def _ai_format_risk(concept: str, entry_type: str, rf: dict) -> dict:
         temperature=0.2,
     )
     return json.loads(resp.choices[0].message.content)
+
+
+def _generate_library_description(report: dict) -> str:
+    """Generate a concise AI summary of the tender type for the library card."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+        summary_text = "\n".join(report.get("executive_summary", []))
+        reqs = report.get("requirements", {})
+        reqs_text = ""
+        for cat, items in reqs.items():
+            reqs_text += f"{cat}: " + "; ".join(str(i) for i in items[:3]) + "\n"
+        risks_text = ", ".join(r.get("risk","") for r in report.get("risks",[])[:5])
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "system",
+                "content": (
+                    "You are a tender analyst for Inpeco (Total Laboratory Automation). "
+                    "Write a single concise sentence (max 30 words) describing this tender. "
+                    "Immediately flag if it is a TLA (Total Laboratory Automation) project or partial. "
+                    "Mention if multi-floor, multi-lab, multi-site. "
+                    "Mention specific specialties (e.g. microbiology, molecular, blood bank) if involved. "
+                    "Output only the sentence, no prefix."
+                ),
+            }, {
+                "role": "user",
+                "content": f"Summary:\n{summary_text}\n\nRequirements:\n{reqs_text}\nTop risks: {risks_text}",
+            }],
+            temperature=0.2,
+            max_tokens=80,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return (report.get("executive_summary") or [""])[0][:120]
+
+
+def _lookup_location_online(authority_name: str) -> tuple[str, str]:
+    """Use GPT to infer city and country for a contracting authority if not found in docs."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "system",
+                "content": (
+                    "You are a geography expert. Given a hospital or institution name, "
+                    "return the most likely city and country. "
+                    'Return ONLY valid JSON: {"city": "...", "country": "..."} '
+                    'If unknown, use empty strings.'
+                ),
+            }, {
+                "role": "user",
+                "content": f"Institution: {authority_name}",
+            }],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=60,
+        )
+        data = json.loads(resp.choices[0].message.content)
+        return data.get("city", ""), data.get("country", "")
+    except Exception:
+        return "", ""
 
 
 # ─── Query-param card navigation ─────────────────────────────────
@@ -418,21 +485,27 @@ a.feat-link:hover .feat-card {{
 /* ── Library rows ── */
 .lib-row {{
     background: {WHITE};
-    border-radius: 10px;
-    padding: 1rem 1.5rem;
-    margin-bottom: 0.55rem;
-    border-left: 4px solid {PRIMARY};
-    box-shadow: 0 1px 8px rgba(0,0,0,0.055);
+    border-radius: 12px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 0.7rem;
+    border-left: 5px solid {PRIMARY};
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 1rem;
 }}
 .lib-row-nogo {{ border-left-color: #e74c3c; }}
 .lib-row-mit  {{ border-left-color: {ORANGE}; }}
-.lib-title    {{ font-size: 0.9rem; font-weight: 700; color: {NAVY}; }}
-.lib-meta     {{ font-size: 0.74rem; color: #7a96b0; margin-top: 0.2rem; }}
-.lib-summary  {{ font-size: 0.78rem; color: #4a6a8a; margin-top: 0.3rem; font-style: italic; }}
+.lib-client-title {{
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: {NAVY};
+    letter-spacing: 0.01em;
+    margin-bottom: 0.18rem;
+}}
+.lib-meta     {{ font-size: 0.74rem; color: #7a96b0; margin-top: 0.1rem; }}
+.lib-summary  {{ font-size: 0.8rem; color: #3a5a7a; margin-top: 0.4rem; line-height: 1.55; }}
 .lib-badge {{
     font-size: 0.69rem;
     font-weight: 700;
@@ -445,6 +518,111 @@ a.feat-link:hover .feat-card {{
 .badge-go   {{ background: #d4f5e5; color: #1a7a48; }}
 .badge-mit  {{ background: #fef0c7; color: #a06000; }}
 .badge-nogo {{ background: #fde8e8; color: #c0392b; }}
+
+/* ── Report page: white container ── */
+.report-page {{
+    background: {WHITE};
+    border-radius: 18px;
+    padding: 2.2rem 2.5rem 2.5rem;
+    margin-top: 1rem;
+    box-shadow: 0 4px 24px rgba(0,56,101,0.10);
+}}
+.rpt-h1 {{
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: {PRIMARY};
+    border-left: 4px solid {PRIMARY};
+    padding-left: 0.75rem;
+    margin: 1.8rem 0 0.9rem;
+    letter-spacing: 0.01em;
+}}
+.rpt-h1-orange {{
+    color: {ORANGE};
+    border-left-color: {ORANGE};
+}}
+.rpt-verdict {{
+    border-radius: 12px;
+    padding: 1.2rem 1.8rem;
+    margin-bottom: 1.4rem;
+    border-left-width: 5px;
+    border-left-style: solid;
+}}
+.rpt-verdict-go     {{ background: #f0fdf6; border-left-color: #2ecc71; }}
+.rpt-verdict-go-mit {{ background: #fffbf0; border-left-color: {ORANGE}; }}
+.rpt-verdict-nogo   {{ background: #fff5f5; border-left-color: #e74c3c; }}
+.rpt-verdict-label  {{ font-size: 1.55rem; font-weight: 800; color: {NAVY}; letter-spacing: 0.05em; }}
+.rpt-verdict-score  {{ font-size: 0.85rem; color: #6a88aa; margin-top: 0.3rem; }}
+.rpt-verdict-rationale {{ font-size: 0.88rem; color: #3a5570; margin-top: 0.6rem; font-style: italic; line-height: 1.55; }}
+.rpt-ss-card {{
+    background: #fff5f0;
+    border-left: 4px solid {ORANGE};
+    border-radius: 8px;
+    padding: 0.9rem 1.15rem;
+    margin-bottom: 0.6rem;
+}}
+.rpt-ss-id  {{ font-size: 0.7rem; font-weight: 700; color: {ORANGE}; letter-spacing: 0.07em; text-transform: uppercase; }}
+.rpt-ss-desc {{ font-size: 0.92rem; font-weight: 700; color: {NAVY}; margin: 0.2rem 0 0.3rem; }}
+.rpt-ss-ref  {{ font-size: 0.78rem; color: {PRIMARY}; font-weight: 600; }}
+.rpt-ss-ev   {{ font-size: 0.78rem; color: #5a7a9a; line-height: 1.5; margin-top: 0.15rem; }}
+.rpt-risk-card {{
+    background: #f8fbff;
+    border-radius: 8px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 0.5rem;
+    border-left: 4px solid {PRIMARY};
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}}
+.rpt-risk-card-high   {{ border-left-color: #e74c3c; background: #fff8f8; }}
+.rpt-risk-card-medium {{ border-left-color: {ORANGE}; background: #fffbf5; }}
+.rpt-risk-card-low    {{ border-left-color: #2ecc71; background: #f5fdf8; }}
+.rpt-risk-level {{
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.18rem 0.6rem;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}}
+.level-high   {{ background: #fde8e8; color: #c0392b; }}
+.level-medium {{ background: #fef0c7; color: #a06000; }}
+.level-low    {{ background: #d4f5e5; color: #1a7a48; }}
+.rpt-risk-score {{
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: {NAVY};
+    min-width: 2.5rem;
+    text-align: center;
+    flex-shrink: 0;
+}}
+.rpt-risk-score-label {{ font-size: 0.6rem; color: #8aa0b8; font-weight: 500; }}
+.rpt-risk-body {{ flex: 1; min-width: 0; }}
+.rpt-risk-name {{ font-size: 0.9rem; font-weight: 700; color: {NAVY}; margin-bottom: 0.18rem; }}
+.rpt-risk-cat  {{ font-size: 0.7rem; color: {PRIMARY}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }}
+.rpt-risk-ref  {{ font-size: 0.75rem; color: {PRIMARY}; font-weight: 600; margin-top: 0.3rem; }}
+.rpt-risk-ev   {{ font-size: 0.75rem; color: #5a7a9a; font-style: italic; margin-top: 0.15rem; line-height: 1.4; }}
+.rpt-risk-mit  {{ font-size: 0.75rem; color: #3a6a4a; margin-top: 0.2rem; }}
+.rpt-bullet-item {{
+    font-size: 0.87rem;
+    color: #2a3a4a;
+    padding: 0.3rem 0 0.3rem 1rem;
+    border-bottom: 1px solid #f0f4f8;
+    line-height: 1.5;
+}}
+.rpt-deadline-row {{
+    display: flex;
+    gap: 0.8rem;
+    align-items: flex-start;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f0f4f8;
+    font-size: 0.85rem;
+    color: #2a3a4a;
+}}
+.rpt-deadline-when {{ font-weight: 700; color: {NAVY}; min-width: 6rem; flex-shrink: 0; }}
+.rpt-deadline-ev   {{ font-size: 0.75rem; color: #7a96b0; font-style: italic; }}
 
 /* ── Inline notes (plain text, no boxes) ── */
 .info-box {{
@@ -960,16 +1138,39 @@ def view_analyze():
                     st.session_state.report = report
                     st.session_state.run_done = True
 
-                    summary_line = (report.get("executive_summary") or [""])[0][:140]
+                    # Resolve city/country — fall back to online lookup
+                    city    = report.get("city", "").strip()
+                    country = report.get("country", "").strip()
+                    authority = report.get("contracting_authority", "") or ""
+                    if (not city or not country) and authority:
+                        with st.spinner("Locating contracting authority…"):
+                            c2, co2 = _lookup_location_online(authority)
+                            city    = city    or c2
+                            country = country or co2
+
+                    # Build display title: Client - City (Country)
+                    loc_parts = []
+                    if city:    loc_parts.append(city)
+                    if country: loc_parts.append(f"({country})")
+                    loc_str = " ".join(loc_parts) if loc_parts else ""
+                    client_label = authority or report.get("tender_title") or "—"
+                    display_title = f"{client_label} – {loc_str}" if loc_str else client_label
+
+                    # AI-generated description
+                    with st.spinner("Generating summary…"):
+                        ai_desc = _generate_library_description(report)
+
                     save_to_library({
-                        "date":    datetime.now().strftime("%Y-%m-%d"),
-                        "title":   report.get("tender_title") or "—",
-                        "client":  report.get("contracting_authority") or "—",
-                        "country": report.get("country") or "—",
-                        "verdict": report.get("go_nogo", {}).get("recommendation", "—"),
-                        "score":   report.get("go_nogo", {}).get("score", 0),
-                        "summary": summary_line,
-                        "files":   [f.name for f in uploaded_files],
+                        "date":          datetime.now().strftime("%Y-%m-%d"),
+                        "display_title": display_title,
+                        "title":         report.get("tender_title") or "—",
+                        "client":        authority or "—",
+                        "city":          city or "—",
+                        "country":       country or "—",
+                        "verdict":       report.get("go_nogo", {}).get("recommendation", "—"),
+                        "score":         report.get("go_nogo", {}).get("score", 0),
+                        "summary":       ai_desc,
+                        "files":         [f.name for f in uploaded_files],
                     })
                     st.rerun()
                 except Exception as e:
@@ -1029,30 +1230,48 @@ def view_library():
 
     st.caption(f"{len(filtered)} result(s)")
 
-    for entry in filtered:
+    lib_full = load_library()  # full list for delete operations
+
+    for idx, entry in enumerate(filtered):
+        # Find real index in full library (needed for delete)
+        real_idx = next(
+            (i for i, e in enumerate(lib_full) if e == entry),
+            None,
+        )
         v = entry.get("verdict", "—")
         row_cls   = "lib-row" + (" lib-row-nogo" if v == "NO-GO" else " lib-row-mit" if "Mitigation" in v else "")
         badge_cls = "badge-nogo" if v == "NO-GO" else ("badge-mit" if "Mitigation" in v else "badge-go")
-        st.markdown(f"""
-        <div class="{row_cls}">
-          <div style="flex:1;min-width:0;">
-            <div class="lib-title">{entry.get("title","—")}</div>
-            <div class="lib-meta">
-              📅 {entry.get("date","—")} &nbsp;·&nbsp;
-              🏢 {entry.get("client","—")} &nbsp;·&nbsp;
-              🌍 {entry.get("country","—")} &nbsp;·&nbsp;
-              Score: {entry.get("score","—")}/100
+
+        # display_title = "Client – City (Country)" or fall back to old title
+        display_title = entry.get("display_title") or entry.get("client") or entry.get("title") or "—"
+        date_score = f"📅 {entry.get('date','—')} &nbsp;·&nbsp; Score: {entry.get('score','—')}/100"
+
+        col_card, col_del = st.columns([20, 1])
+        with col_card:
+            st.markdown(f"""
+            <div class="{row_cls}">
+              <div style="flex:1;min-width:0;">
+                <div class="lib-client-title">{display_title}</div>
+                <div class="lib-meta">{date_score}</div>
+                <div class="lib-summary">{entry.get("summary","")}</div>
+              </div>
+              <div style="flex-shrink:0;padding-left:0.5rem;">
+                <span class="lib-badge {badge_cls}">{v}</span>
+              </div>
             </div>
-            <div class="lib-summary">{entry.get("summary","")}</div>
-          </div>
-          <div><span class="lib-badge {badge_cls}">{v}</span></div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+        with col_del:
+            st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
+            if real_idx is not None and st.button("🗑", key=f"del_lib_{idx}", help="Delete from history"):
+                lib_full.pop(real_idx)
+                with open(LIBRARY_PATH, "w", encoding="utf-8") as f:
+                    json.dump(lib_full, f, ensure_ascii=False, indent=2)
+                st.rerun()
 
     if filtered:
         st.divider()
         df_e = pd.DataFrame(filtered)
-        cols = [c for c in ["date", "title", "client", "country", "verdict", "score", "summary"] if c in df_e.columns]
+        cols = [c for c in ["date", "display_title", "client", "city", "country", "verdict", "score", "summary"] if c in df_e.columns]
         st.download_button(
             "⬇️ Export as CSV",
             data=df_e[cols].to_csv(index=False),
@@ -1102,14 +1321,42 @@ def view_knowledge():
         )
         is_ss = entry_type == "Showstopper"
 
+        # Level selector — only for risks (showstoppers are always NO-GO, no level needed)
+        risk_level = "Medium"
+        if not is_ss:
+            st.markdown(
+                '<p style="font-size:0.8rem;color:rgba(255,255,255,0.88);font-weight:600;margin:0.7rem 0 0.2rem;">Risk level:</p>',
+                unsafe_allow_html=True,
+            )
+            level_cols = st.columns(3)
+            level_labels = {"Low": ("🟢", "#d4f5e5", "#1a7a48"),
+                            "Medium": ("🟡", "#fef0c7", "#a06000"),
+                            "High": ("🔴", "#fde8e8", "#c0392b")}
+            if "kb_risk_level" not in st.session_state:
+                st.session_state.kb_risk_level = "Medium"
+            for col, lvl in zip(level_cols, ["Low", "Medium", "High"]):
+                icon, bg, fg = level_labels[lvl]
+                selected = st.session_state.kb_risk_level == lvl
+                border = "2px solid white" if selected else "2px solid transparent"
+                with col:
+                    if st.button(
+                        f"{icon} {lvl}",
+                        key=f"kb_lvl_{lvl}",
+                        use_container_width=True,
+                        type="primary" if selected else "secondary",
+                    ):
+                        st.session_state.kb_risk_level = lvl
+                        st.rerun()
+            risk_level = st.session_state.kb_risk_level
+
         concept = st.text_area(
             "Describe the risk in plain language",
             placeholder=(
-                "e.g. Sometimes the tender requires a connection to a specific middleware brand "
-                "that we have never integrated before and the timeline is too short to develop it."
-                if not is_ss else
                 "e.g. The tender specifies that the system must be the same brand currently installed "
                 "in their lab, which is a competitor."
+                if is_ss else
+                "e.g. Sometimes the tender requires a connection to a specific middleware brand "
+                "that we have never integrated before and the timeline is too short to develop it."
             ),
             height=100,
             key="kb_concept",
@@ -1119,14 +1366,20 @@ def view_knowledge():
             with st.spinner("AI is structuring the entry…"):
                 try:
                     rf = load_risk_factors()
-                    new_entry = _ai_format_risk(concept.strip(), "showstopper" if is_ss else "risk_factor", rf)
+                    new_entry = _ai_format_risk(
+                        concept.strip(),
+                        "showstopper" if is_ss else "risk_factor",
+                        rf,
+                        level=risk_level,
+                    )
                     rr = rf.setdefault("risk_register", {})
                     if is_ss:
                         rr.setdefault("showstoppers", []).append(new_entry)
                     else:
                         rr.setdefault("risk_factors", []).append(new_entry)
                     save_risk_factors(rf)
-                    st.success(f"Added **{new_entry.get('id')} — {new_entry.get('name')}**")
+                    level_tag = f" [{risk_level}]" if not is_ss else ""
+                    st.success(f"Added **{new_entry.get('id')} — {new_entry.get('name')}**{level_tag}")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
@@ -1152,7 +1405,14 @@ def view_knowledge():
             with st.expander(f"⚠️ Risk factors ({len(rf_list or [])})"):
                 for i, r in enumerate(rf_list or []):
                     c_txt, c_del = st.columns([10, 1])
-                    c_txt.markdown(f"**{r.get('id','')}** — {r.get('name','')}  \n*{r.get('description','')}*")
+                    lvl = r.get("level", "")
+                    lvl_icons = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}
+                    lvl_tag = f" {lvl_icons.get(lvl,'')} {lvl}" if lvl else ""
+                    score_tag = f" · Score: {r.get('score','?')}" if r.get("score") is not None else ""
+                    c_txt.markdown(
+                        f"**{r.get('id','')}** — {r.get('name','')}  {lvl_tag}{score_tag}  \n"
+                        f"*{r.get('description','')}*"
+                    )
                     if c_del.button("🗑", key=f"del_rf_{i}", help="Remove"):
                         rf["risk_register"]["risk_factors"].pop(i)
                         save_risk_factors(rf)
@@ -1213,100 +1473,8 @@ def _render_report(report: dict):
             unsafe_allow_html=True,
         )
 
-    # Verdict banner
-    go_nogo   = report.get("go_nogo", {})
-    rec       = go_nogo.get("recommendation", "—")
-    score     = go_nogo.get("score", 0)
-    rationale = go_nogo.get("rationale", "")
-    icons   = {"GO": "✅", "GO with Mitigation": "⚠️", "NO-GO": "🚫"}
-    classes = {"GO": "verdict-go", "GO with Mitigation": "verdict-go-mit", "NO-GO": "verdict-nogo"}
-    st.markdown(f"""
-    <div class="{classes.get(rec, 'verdict-go')}">
-      <div class="verdict-label">{icons.get(rec, "⚪")} {rec}</div>
-      <div class="verdict-score">Complexity score: {score} / 100</div>
-      <div class="verdict-rationale">{rationale}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Key metrics ────────────────────────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Tender type",  (report.get("tender_type") or "—").upper())
-    c2.metric("Deadline",      report.get("submission_deadline") or "—")
-    c3.metric("Est. value",    report.get("estimated_value_eur") or "—")
-    c4.metric("Authority",    (report.get("contracting_authority") or "—")[:30])
-
-    # ── Executive Summary ──────────────────────────────────────────
-    st.markdown('<div class="section-heading">Executive Summary</div>', unsafe_allow_html=True)
-    for line in report.get("executive_summary", []):
-        st.markdown(f"- {line}")
-
-    # ── Go / No-Go verdict ─────────────────────────────────────────
-    # (already rendered above as banner — showstoppers follow immediately)
-    showstoppers = report.get("showstoppers", [])
-    if showstoppers:
-        st.markdown(
-            f'<div class="section-heading section-heading-orange">Showstoppers ({len(showstoppers)})</div>',
-            unsafe_allow_html=True,
-        )
-        for ss in showstoppers:
-            st.markdown(f"""
-<div class="ss-card">
-  <div class="ss-id">{ss.get("id", "SS")}</div>
-  <div class="ss-desc">{ss.get("description", "")}</div>
-  <div class="ss-evidence">Evidence: {ss.get("evidence", "—")} · Impact: {ss.get("impact", "—")}</div>
-</div>""", unsafe_allow_html=True)
-
-    # ── Key Deadlines & Milestones ─────────────────────────────────
-    deadlines = report.get("deadlines", [])
-    st.markdown('<div class="section-heading">Key Deadlines & Milestones</div>', unsafe_allow_html=True)
-    if deadlines:
-        for d in deadlines:
-            st.markdown(f"- **{d.get('when','?')}** — {d.get('milestone','')}  \n  *{d.get('evidence','')}*")
-    else:
-        st.markdown('<p class="info-box">No specific dates identified in the document.</p>', unsafe_allow_html=True)
-
-    # ── Requirements ───────────────────────────────────────────────
-    reqs = report.get("requirements", {})
-    st.markdown('<div class="section-heading">Requirements & Constraints</div>', unsafe_allow_html=True)
-    if reqs:
-        for key, items in reqs.items():
-            if items:
-                st.markdown(f"**{key.replace('_', ' ').title()}**")
-                for item in items:
-                    st.markdown(f"- {item}")
-    else:
-        st.markdown('<p class="info-box">No requirements extracted.</p>', unsafe_allow_html=True)
-
-    # ── Deliverables ───────────────────────────────────────────────
-    deliverables = report.get("deliverables", [])
-    st.markdown('<div class="section-heading">Deliverables to Prepare</div>', unsafe_allow_html=True)
-    if deliverables:
-        for item in deliverables:
-            st.markdown(f"- {item}")
-    else:
-        st.markdown('<p class="info-box">No deliverables listed.</p>', unsafe_allow_html=True)
-
-    # ── Risk Register ──────────────────────────────────────────────
-    risks = report.get("risks", [])
-    st.markdown('<div class="section-heading">Risk Register</div>', unsafe_allow_html=True)
-    if risks:
-        df = pd.DataFrame(risks)
-        ordered = [c for c in ["id","risk","category","probability","impact","score","evidence","mitigation"] if c in df.columns]
-        st.dataframe(df[ordered].sort_values("score", ascending=False), use_container_width=True, hide_index=True)
-    else:
-        st.markdown('<p class="info-box">No risks identified.</p>', unsafe_allow_html=True)
-
-    # ── Open Questions ─────────────────────────────────────────────
-    open_qs = report.get("open_questions", [])
-    if open_qs:
-        st.markdown('<div class="section-heading">Open Questions</div>', unsafe_allow_html=True)
-        for q in open_qs:
-            st.markdown(f"- {q}")
-
-    # Download + API usage
-    st.divider()
+    # ── Download button (top, prominent) ──────────────────────────
     col_dl, col_meta = st.columns([2, 1])
-
     with col_dl:
         try:
             docx_bytes = build_docx(report, PRIMARY, ORANGE)
@@ -1321,7 +1489,6 @@ def _render_report(report: dict):
             )
         except Exception as e:
             st.warning(f"Could not generate Word report: {e}")
-
     with col_meta:
         if meta:
             with st.expander("API usage"):
@@ -1331,6 +1498,138 @@ def _render_report(report: dict):
                 st.caption(f"Sections: {meta.get('pages_analyzed',0)}")
                 if meta.get("truncated"):
                     st.caption(f"⚠️ Truncated at {meta.get('chars_analyzed',0):,} chars")
+
+    # ── White report container opens ───────────────────────────────
+    st.markdown('<div class="report-page">', unsafe_allow_html=True)
+
+    # ── Verdict banner ─────────────────────────────────────────────
+    go_nogo   = report.get("go_nogo", {})
+    rec       = go_nogo.get("recommendation", "—")
+    score     = go_nogo.get("score", 0)
+    rationale = go_nogo.get("rationale", "")
+    icons   = {"GO": "✅", "GO with Mitigation": "⚠️", "NO-GO": "🚫"}
+    vcls    = {"GO": "rpt-verdict-go", "GO with Mitigation": "rpt-verdict-go-mit", "NO-GO": "rpt-verdict-nogo"}
+    st.markdown(f"""
+    <div class="{vcls.get(rec, 'rpt-verdict-go')} rpt-verdict">
+      <div class="rpt-verdict-label">{icons.get(rec, "⚪")} {rec}</div>
+      <div class="rpt-verdict-score">Feasibility score: {score} / 100</div>
+      <div class="rpt-verdict-rationale">{rationale}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Key metrics ────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Tender type",  (report.get("tender_type") or "—").upper())
+    c2.metric("Deadline",      report.get("submission_deadline") or "—")
+    c3.metric("Est. value",    report.get("estimated_value_eur") or "—")
+    authority = report.get("contracting_authority") or "—"
+    city_disp = report.get("city", "")
+    country_disp = report.get("country", "")
+    loc = f"{city_disp} ({country_disp})" if city_disp and country_disp else (city_disp or country_disp or "—")
+    c4.metric("Location", loc[:28])
+
+    # ── Executive Summary ──────────────────────────────────────────
+    st.markdown('<div class="rpt-h1">Executive Summary</div>', unsafe_allow_html=True)
+    items_html = "".join(f'<div class="rpt-bullet-item">• {line}</div>' for line in report.get("executive_summary", []))
+    st.markdown(items_html or '<p style="color:#8aa0b8;font-size:0.85rem;">No summary available.</p>', unsafe_allow_html=True)
+
+    # ── Showstoppers ───────────────────────────────────────────────
+    showstoppers = report.get("showstoppers", [])
+    if showstoppers:
+        st.markdown(
+            f'<div class="rpt-h1 rpt-h1-orange">🚨 Showstoppers ({len(showstoppers)}) — NO-GO</div>',
+            unsafe_allow_html=True,
+        )
+        for ss in showstoppers:
+            doc_ref = ss.get("document_ref", "")
+            evidence = ss.get("evidence", "")
+            ref_html = f'<div class="rpt-ss-ref">📄 {doc_ref}</div>' if doc_ref else ""
+            st.markdown(f"""
+<div class="rpt-ss-card">
+  <div class="rpt-ss-id">{ss.get("id", "SS")}</div>
+  <div class="rpt-ss-desc">{ss.get("description", "")}</div>
+  {ref_html}
+  <div class="rpt-ss-ev">Evidence: {evidence} — Impact: {ss.get("impact","—")}</div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Key Deadlines & Milestones ─────────────────────────────────
+    deadlines = report.get("deadlines", [])
+    st.markdown('<div class="rpt-h1">Key Deadlines & Milestones</div>', unsafe_allow_html=True)
+    if deadlines:
+        rows_html = ""
+        for d in deadlines:
+            rows_html += (
+                f'<div class="rpt-deadline-row">'
+                f'<span class="rpt-deadline-when">{d.get("when","?")}</span>'
+                f'<span>{d.get("milestone","")}'
+                + (f'<br><span class="rpt-deadline-ev">{d.get("evidence","")}</span>' if d.get("evidence") else "")
+                + '</span></div>'
+            )
+        st.markdown(rows_html, unsafe_allow_html=True)
+    else:
+        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No specific dates identified.</p>', unsafe_allow_html=True)
+
+    # ── Requirements ───────────────────────────────────────────────
+    reqs = report.get("requirements", {})
+    st.markdown('<div class="rpt-h1">Requirements & Constraints</div>', unsafe_allow_html=True)
+    if reqs:
+        for key, items in reqs.items():
+            if items:
+                st.markdown(f"**{key.replace('_', ' ').title()}**")
+                items_html = "".join(f'<div class="rpt-bullet-item">• {item}</div>' for item in items)
+                st.markdown(items_html, unsafe_allow_html=True)
+    else:
+        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No requirements extracted.</p>', unsafe_allow_html=True)
+
+    # ── Deliverables ───────────────────────────────────────────────
+    deliverables = report.get("deliverables", [])
+    st.markdown('<div class="rpt-h1">Deliverables to Prepare</div>', unsafe_allow_html=True)
+    if deliverables:
+        items_html = "".join(f'<div class="rpt-bullet-item">• {item}</div>' for item in deliverables)
+        st.markdown(items_html, unsafe_allow_html=True)
+    else:
+        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No deliverables listed.</p>', unsafe_allow_html=True)
+
+    # ── Risk Register ──────────────────────────────────────────────
+    risks = report.get("risks", [])
+    st.markdown('<div class="rpt-h1">Risk Register</div>', unsafe_allow_html=True)
+    if risks:
+        level_cls = {"High": "rpt-risk-card-high", "Medium": "rpt-risk-card-medium", "Low": "rpt-risk-card-low"}
+        badge_cls = {"High": "level-high", "Medium": "level-medium", "Low": "level-low"}
+        sorted_risks = sorted(risks, key=lambda r: r.get("score", 0), reverse=True)
+        for r in sorted_risks:
+            lvl = r.get("level", "Medium")
+            doc_ref = r.get("document_ref", "")
+            ref_html = f'<div class="rpt-risk-ref">📄 {doc_ref}</div>' if doc_ref else ""
+            mit = r.get("mitigation", "")
+            mit_html = f'<div class="rpt-risk-mit">💡 {mit}</div>' if mit else ""
+            st.markdown(f"""
+<div class="rpt-risk-card {level_cls.get(lvl, '')}">
+  <div style="display:flex;flex-direction:column;align-items:center;min-width:2.8rem;">
+    <div class="rpt-risk-score">{r.get("score","—")}</div>
+    <div class="rpt-risk-score-label">score</div>
+    <div style="margin-top:0.4rem;"><span class="rpt-risk-level {badge_cls.get(lvl,'')}">{lvl}</span></div>
+  </div>
+  <div class="rpt-risk-body">
+    <div class="rpt-risk-name">{r.get("risk","")}</div>
+    <div class="rpt-risk-cat">{r.get("category","")}</div>
+    {ref_html}
+    <div class="rpt-risk-ev">{r.get("evidence","")}</div>
+    {mit_html}
+  </div>
+</div>""", unsafe_allow_html=True)
+    else:
+        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No risks identified.</p>', unsafe_allow_html=True)
+
+    # ── Open Questions ─────────────────────────────────────────────
+    open_qs = report.get("open_questions", [])
+    if open_qs:
+        st.markdown('<div class="rpt-h1">Open Questions</div>', unsafe_allow_html=True)
+        items_html = "".join(f'<div class="rpt-bullet-item">• {q}</div>' for q in open_qs)
+        st.markdown(items_html, unsafe_allow_html=True)
+
+    # ── Close white container ──────────────────────────────────────
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ─── Router ───────────────────────────────────────────────────────

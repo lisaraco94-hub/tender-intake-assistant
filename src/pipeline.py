@@ -125,6 +125,8 @@ Use exactly this structure:
   "tender_date": "string or empty",
   "tender_reference": "string or empty",
   "contracting_authority": "string",
+  "city": "string (city where contracting authority is located, search context clues, or empty)",
+  "country": "string (country, e.g. Italy, France, or empty)",
   "tender_type": "bundle | unbundle | unknown",
   "estimated_value_eur": "string or empty",
   "submission_deadline": "string or empty",
@@ -138,7 +140,8 @@ Use exactly this structure:
     {{
       "id": "string",
       "description": "string",
-      "evidence": "string (page reference or quote)",
+      "evidence": "string (direct quote or paraphrase)",
+      "document_ref": "string (e.g. 'Technical Specs, p.12, §3.4')",
       "impact": "string"
     }}
   ],
@@ -147,10 +150,10 @@ Use exactly this structure:
       "id": "string",
       "risk": "string",
       "category": "string",
-      "probability": 1,
-      "impact": 1,
-      "score": 1,
-      "evidence": "string",
+      "level": "Low | Medium | High",
+      "score": 50,
+      "document_ref": "string (e.g. 'Tender Doc, p.8, §2.3 – Connectivity')",
+      "evidence": "string (direct quote or paraphrase)",
       "mitigation": "string"
     }}
   ],
@@ -175,13 +178,18 @@ Use exactly this structure:
 }}
 
 SCORING RULES:
-- probability and impact: integer 1-5
-- score = probability * impact
+- risks level: Low | Medium | High based on severity/likelihood of blocking the bid
+- risks score: integer 0-100 measuring risk severity
+  - Low risk  → score 15–35
+  - Medium risk → score 40–65
+  - High risk → score 70–90
+- document_ref: always specify document name (if multiple files), page number, and section/paragraph
 - Go/No-Go logic:
   - Any showstopper present → NO-GO
-  - Sum of top-5 risk scores >= 60 → GO with Mitigation
+  - Any High risk OR average risk score >= 55 → GO with Mitigation
   - Otherwise → GO
-- score in go_nogo: 0-100 representing overall complexity
+- go_nogo score: 0-100 representing overall bid feasibility (100=fully feasible, 0=completely infeasible)
+- city and country: extract from document context (letterhead, address, jurisdiction clauses); if not explicit, infer from language, law references, or institution names
 """
 
 
