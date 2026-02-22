@@ -992,10 +992,9 @@ def view_home():
             <span class="feat-icon">🧠</span>
             <div class="feat-title">Knowledge Base</div>
             <div class="feat-desc">
-              Manage Inpeco's evaluation rules — add showstoppers
-              and risk factors specific to Inpeco just by typing them
-              in plain text. Upload past bid responses to improve
-              analysis accuracy over time.
+              Add Inpeco-specific showstoppers and risks by typing
+              in plain text. Upload past bid responses
+              to sharpen analysis accuracy over time.
             </div>
             <div class="feat-badge feat-badge-orange">Configurable</div>
           </div>

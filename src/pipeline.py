@@ -39,7 +39,16 @@ def read_pdf_pages(pdf_bytes: bytes) -> List[str]:
 # ─── Risk factors loader ──────────────────────────────────────────
 
 def load_risk_factors(path: str = "assets/risk_factors.json") -> Dict[str, Any]:
-    """Load company-specific risk factors from a JSON file."""
+    """Load company-specific risk factors.
+
+    If the user file does not exist yet (e.g. fresh deployment), copy the
+    committed seed file so user edits are never overwritten by git.
+    """
+    import shutil as _shutil
+    if not os.path.exists(path):
+        seed = os.path.splitext(path)[0] + ".seed.json"
+        if os.path.exists(seed):
+            _shutil.copy(seed, path)
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
