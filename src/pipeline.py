@@ -110,17 +110,25 @@ Analyze the tender document provided and produce a structured pre-bid screening 
 Focus on identifying SHOWSTOPPERS (reasons to immediately decline), HIGH RISKS, and MEDIUM RISKS
 based on the company risk register provided.
 
-TENDER TYPE CLASSIFICATION — READ CAREFULLY:
-- "bundle": The tender lot includes BOTH the automation system AND the supply of analyzers and/or
-  reagents as a single integrated procurement. Inpeco must act as prime contractor responsible for
-  the full solution including third-party IVD instruments.
-  Example signals: "fornitura di analizzatori", "supply of analyzers included", "all-in-one tender",
-  "automation + diagnostic instruments", reagents in the same lot.
-- "unbundle": The tender covers ONLY the automation/pre-analytical track. Analyzers already belong
-  to the hospital or are procured via a separate parallel tender. The automation must connect to
-  specific existing/future analyzers but does NOT include supplying them.
-  Example signals: "automazione da collegare agli analizzatori presenti", "connectivity to existing
-  instruments", "track only", "pre-analytics only", analyzers listed only as connectivity targets.
+TENDER TYPE CLASSIFICATION — READ CAREFULLY AND APPLY STRICTLY:
+- "bundle": The tender lot explicitly requires Inpeco to SUPPLY analyzers and/or reagents as part
+  of the same contract. Inpeco must act as prime contractor for the full integrated solution
+  including third-party IVD instruments.
+  Signals: "fornitura di analizzatori", "supply of analyzers included in the lot", reagents in the
+  same lot, "all-in-one contract", "automation + diagnostic instruments to be provided".
+
+- "unbundle": The tender covers ONLY the pre-analytical automation track. The analyzers are already
+  owned by the hospital OR will be procured via a completely separate tender/lot. Inpeco only
+  supplies and installs the automation system and ensures connectivity to those analyzers.
+  ⚠️ CRITICAL ANTI-PATTERN — do NOT classify as bundle just because:
+    • The document lists analyzer brands/models (they are connectivity targets, not items to supply)
+    • The document requires interfacing or connecting to existing/future analyzers
+    • The document mentions middleware or LIS integration
+    • The word "analizzatori" appears (it may refer to existing equipment)
+  Signals: "automazione da collegare", "connectivity to existing instruments", "pre-analytics only",
+  "track only", "interfacciamento con analizzatori presenti", analyzers listed only as things
+  to connect to, separate lots or separate tenders for analyzers.
+
 - "unknown": Insufficient information in the document to determine type.
 
 RISK REGISTER TO APPLY:
@@ -187,6 +195,23 @@ Use exactly this structure:
   ]
 }}
 
+FIELD EXTRACTION RULES — APPLY TO EVERY ANALYSIS:
+- city: Extract the city where the contracting authority/hospital is located. Look in: letterhead,
+  address blocks, "sede legale", "indirizzo", jurisdiction clause, applicable law references,
+  institution name (e.g. "Ospedale Civico di Palermo" → city = "Palermo"). If not explicit,
+  infer from the institution name or document language. Never leave blank if inferable.
+- country: Extract the country. Infer from language (Italian doc → Italy), institution name,
+  applicable law ("diritto svizzero" → Switzerland, "legge italiana" → Italy), or address.
+  Never leave blank if inferable.
+- submission_deadline: Extract the exact date by which the bid must be submitted. Look for:
+  "scadenza", "termine presentazione offerta", "data presentazione", "submission deadline",
+  "offerte entro il", "deadline". Return as a readable date string (e.g. "15 March 2025").
+  If not stated, return empty string.
+- estimated_value_eur: Extract the estimated contract value. Look for: "valore stimato",
+  "importo a base d'asta", "base d'asta", "importo complessivo", "estimated value",
+  "contract value", "budget". Return as a string with currency (e.g. "€ 2.400.000").
+  If not stated, return empty string.
+
 SCORING RULES:
 - risks level: Low | Medium | High based on severity/likelihood of blocking the bid
 - risks score: integer 0-100 measuring risk severity
@@ -199,7 +224,6 @@ SCORING RULES:
   - Any High risk OR average risk score >= 55 → GO with Mitigation
   - Otherwise → GO
 - go_nogo score: 0-100 representing overall bid feasibility (100=fully feasible, 0=completely infeasible)
-- city and country: extract from letterhead, address, jurisdiction clauses, applicable law; if not explicit, infer from document language, institution name, or regulatory references
 - requirements and deliverables: BE EXHAUSTIVE — do not summarize or truncate. Every item explicitly mentioned in the tender must appear.
 """
 
