@@ -423,6 +423,7 @@ a.feat-link:hover .feat-card {{
     font-size: 0.82rem;
     color: #6a8aaa;
     line-height: 1.65;
+    flex: 1;
 }}
 .feat-badge {{
     display: inline-block;
