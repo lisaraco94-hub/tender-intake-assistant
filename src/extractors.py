@@ -151,21 +151,46 @@ def extract_from_file(file_bytes: bytes, filename: str) -> List[str]:
     """
     Extract text from any supported file type.
     Returns a list of page/chunk strings.
+    Never raises — on any error returns a single-item list with a warning message.
 
     Supported: .pdf, .docx, .xlsx, .xls, .txt, .csv, .tsv, .md
     """
+    import zipfile
+
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
-    if ext == "pdf":
-        return _extract_pdf(file_bytes)
-    elif ext == "docx":
-        return _extract_docx(file_bytes)
-    elif ext in ("xlsx", "xls"):
-        return _extract_xlsx(file_bytes)
-    elif ext in ("txt", "csv", "tsv", "md"):
-        return _extract_text(file_bytes)
-    else:
-        try:
+    try:
+        if ext == "pdf":
+            return _extract_pdf(file_bytes)
+
+        elif ext == "docx":
+            try:
+                return _extract_docx(file_bytes)
+            except (zipfile.BadZipFile, Exception):
+                # Fallback: file may be an old .doc binary or corrupted —
+                # try to salvage whatever readable text is present.
+                try:
+                    return _extract_text(file_bytes)
+                except Exception:
+                    return [f"(Could not extract text from {filename}: not a valid DOCX/ZIP file)"]
+
+        elif ext in ("xlsx", "xls"):
+            try:
+                return _extract_xlsx(file_bytes)
+            except (zipfile.BadZipFile, Exception):
+                try:
+                    return _extract_text(file_bytes)
+                except Exception:
+                    return [f"(Could not extract text from {filename}: not a valid spreadsheet file)"]
+
+        elif ext in ("txt", "csv", "tsv", "md"):
             return _extract_text(file_bytes)
-        except Exception:
-            return [f"(Could not extract text from: {filename})"]
+
+        else:
+            try:
+                return _extract_text(file_bytes)
+            except Exception:
+                return [f"(Could not extract text from: {filename})"]
+
+    except Exception as exc:
+        return [f"(Unexpected error reading {filename}: {exc})"]

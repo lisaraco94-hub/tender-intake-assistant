@@ -899,11 +899,28 @@ def view_analyze():
 
         if st.button("🔍 Run Analysis", disabled=not can_run, type="primary"):
             all_pages: list[str] = []
+            skipped: list[str] = []
             with st.spinner("Reading files…"):
                 for uf in uploaded_files:
-                    pages = extract_from_file(uf.read(), uf.name)
+                    try:
+                        pages = extract_from_file(uf.read(), uf.name)
+                    except Exception as _e:
+                        skipped.append(f"{uf.name} ({_e})")
+                        continue
+                    # extract_from_file returns a warning string on soft errors
+                    if len(pages) == 1 and pages[0].startswith("("):
+                        skipped.append(f"{uf.name} — {pages[0].strip('()')}")
+                        continue
                     all_pages.append(f"=== FILE: {uf.name} ===")
                     all_pages.extend(pages)
+            if skipped:
+                st.warning(
+                    "⚠️ The following file(s) could not be read and were skipped:\n\n"
+                    + "\n".join(f"• {s}" for s in skipped)
+                )
+            if not all_pages:
+                st.error("No readable content found in the uploaded files. Please check the file formats.")
+                st.stop()
 
             knowledge_ctx = _load_knowledge_context()
             n_kb = len([
