@@ -44,6 +44,34 @@ def load_risk_factors(path: str = "assets/risk_factors.json") -> Dict[str, Any]:
         return json.load(f)
 
 
+# ─── Knowledge context loader (disk fallback) ─────────────────────
+
+def _load_knowledge_context_from_disk(
+    max_chars_per_file: int = 12_000,
+    max_total: int = 36_000,
+) -> str:
+    """Load past-bid documents from the knowledge folders and return as a single string."""
+    import glob as _glob
+    chunks: list[str] = []
+    total = 0
+    for folder in ("assets/knowledge/won", "assets/knowledge/lost"):
+        if not os.path.isdir(folder):
+            continue
+        label = "WON" if folder.endswith("won") else "LOST"
+        for fpath in sorted(_glob.glob(os.path.join(folder, "*"))):
+            if total >= max_total:
+                break
+            try:
+                with open(fpath, "rb") as fh:
+                    raw = fh.read()
+                text = raw.decode("utf-8", errors="replace")[:max_chars_per_file]
+                chunks.append(f"--- [{label}] {os.path.basename(fpath)} ---\n{text}")
+                total += len(text)
+            except Exception:
+                continue
+    return "\n\n".join(chunks)
+
+
 # ─── AI prompt builder ────────────────────────────────────────────
 
 def _build_system_prompt(risk_factors: Dict[str, Any], knowledge_context: str = "") -> str:
@@ -199,6 +227,13 @@ def build_prebid_report(
     """
     if risk_factors is None:
         risk_factors = load_risk_factors()
+
+    # Auto-load knowledge context from disk if not provided by caller
+    if not knowledge_context:
+        try:
+            knowledge_context = _load_knowledge_context_from_disk()
+        except Exception:
+            pass
 
     client = _get_client()
 

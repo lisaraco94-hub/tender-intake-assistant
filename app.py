@@ -936,12 +936,25 @@ def view_analyze():
             )
             with st.spinner(spinner_msg):
                 try:
-                    report = build_prebid_report(
-                        all_pages,
-                        risk_factors=risk_factors,
-                        detail=detail,
-                        knowledge_context=knowledge_ctx,
-                    )
+                    try:
+                        report = build_prebid_report(
+                            all_pages,
+                            risk_factors=risk_factors,
+                            detail=detail,
+                            knowledge_context=knowledge_ctx,
+                        )
+                    except TypeError:
+                        # Older pipeline.py without knowledge_context param —
+                        # prepend context as the first page so it's still analysed.
+                        pages_with_ctx = (
+                            [f"=== COMPANY KNOWLEDGE BASE ===\n{knowledge_ctx}"] + all_pages
+                            if knowledge_ctx else all_pages
+                        )
+                        report = build_prebid_report(
+                            pages_with_ctx,
+                            risk_factors=risk_factors,
+                            detail=detail,
+                        )
                     st.session_state.report = report
                     st.session_state.run_done = True
 
