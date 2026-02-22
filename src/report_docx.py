@@ -130,13 +130,16 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
     reqs = report.get("requirements", {})
     if reqs:
         for cat, items in reqs.items():
-            _add_colored_heading(doc, str(cat), 2, accent_hex)
+            _add_colored_heading(doc, cat.replace("_", " ").title(), 2, accent_hex)
             for it in items:
                 p = doc.add_paragraph(style="List Bullet")
-                p.add_run(str(it.get("text", "")))
-                ev = it.get("evidence")
-                if ev:
-                    p.add_run(f" ({ev})").italic = True
+                if isinstance(it, dict):
+                    p.add_run(str(it.get("text", "")))
+                    ev = it.get("evidence")
+                    if ev:
+                        p.add_run(f" ({ev})").italic = True
+                else:
+                    p.add_run(str(it))
     else:
         doc.add_paragraph("No structured requirements extracted.", style="List Bullet")
 
@@ -145,28 +148,46 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
     for item in report.get("deliverables", []):
         doc.add_paragraph(str(item), style="List Bullet")
 
+    # 4b Showstoppers
+    showstoppers = report.get("showstoppers", [])
+    if showstoppers:
+        _add_colored_heading(doc, "4b. Showstoppers — Immediate NO-GO Flags", 1, accent_hex)
+        table = doc.add_table(rows=1, cols=4)
+        hdr = table.rows[0].cells
+        for i, h in enumerate(["ID", "Description", "Document Reference", "Impact"]):
+            _set_cell_text(hdr[i], h, bold=True, color="ffffff")
+            _set_cell_shading(hdr[i], accent_hex)
+        for ss in showstoppers:
+            row = table.add_row().cells
+            _set_cell_text(row[0], str(ss.get("id", "")))
+            _set_cell_text(row[1], str(ss.get("description", "")))
+            _set_cell_text(row[2], str(ss.get("document_ref", ss.get("evidence", ""))))
+            _set_cell_text(row[3], str(ss.get("impact", "")))
+
     # 5 Risks
-    _add_colored_heading(doc, "5. Risk Register (Top)", 1, primary_hex)
+    _add_colored_heading(doc, "5. Risk Register", 1, primary_hex)
     risks = report.get("risks", [])
     if risks:
-        table = doc.add_table(rows=1, cols=7)
+        table = doc.add_table(rows=1, cols=6)
         hdr = table.rows[0].cells
-        headers = ["ID", "Risk", "Category", "Prob (1-5)", "Impact (1-5)", "Score", "Evidence"]
+        headers = ["ID", "Risk", "Category", "Level", "Score (0-100)", "Document Reference"]
         for i, h in enumerate(headers):
             _set_cell_text(hdr[i], h, bold=True, color="ffffff")
             _set_cell_shading(hdr[i], primary_hex)
 
-        for rsk in risks:
+        level_colors = {"High": "e74c3c", "Medium": "F7941D", "Low": "2ecc71"}
+        for rsk in sorted(risks, key=lambda r: r.get("score", 0), reverse=True):
             row = table.add_row().cells
             _set_cell_text(row[0], str(rsk.get("id", "")))
             _set_cell_text(row[1], str(rsk.get("risk", "")))
             _set_cell_text(row[2], str(rsk.get("category", "")))
-            _set_cell_text(row[3], str(rsk.get("prob", "")))
-            _set_cell_text(row[4], str(rsk.get("impact", "")))
-            _set_cell_text(row[5], str(rsk.get("score", "")))
-            _set_cell_text(row[6], str(rsk.get("evidence", "")))
+            lvl = str(rsk.get("level", ""))
+            _set_cell_text(row[3], lvl, bold=True, color=level_colors.get(lvl, "003865"))
+            _set_cell_text(row[4], str(rsk.get("score", "")))
+            doc_ref = str(rsk.get("document_ref", rsk.get("evidence", "")))
+            _set_cell_text(row[5], doc_ref)
     else:
-        doc.add_paragraph("No major risks detected by rule-based engine.", style="List Bullet")
+        doc.add_paragraph("No major risks identified.", style="List Bullet")
 
     # 6 Go/No-Go
     _add_colored_heading(doc, "6. Go / No-Go Recommendation", 1, primary_hex)
