@@ -118,6 +118,8 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
             _set_cell_shading(hdr[i], primary_hex)
 
         for d in deadlines:
+            if not isinstance(d, dict):
+                continue
             row = table.add_row().cells
             _set_cell_text(row[0], str(d.get("milestone", "")))
             _set_cell_text(row[1], str(d.get("when", "")))
@@ -158,6 +160,8 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
             _set_cell_text(hdr[i], h, bold=True, color="ffffff")
             _set_cell_shading(hdr[i], accent_hex)
         for ss in showstoppers:
+            if not isinstance(ss, dict):
+                continue
             row = table.add_row().cells
             _set_cell_text(row[0], str(ss.get("id", "")))
             _set_cell_text(row[1], str(ss.get("description", "")))
@@ -176,6 +180,7 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
             _set_cell_shading(hdr[i], primary_hex)
 
         level_colors = {"High": "e74c3c", "Medium": "F7941D", "Low": "2ecc71"}
+        risks = [r for r in risks if isinstance(r, dict)]
         for rsk in sorted(risks, key=lambda r: r.get("score", 0), reverse=True):
             row = table.add_row().cells
             _set_cell_text(row[0], str(rsk.get("id", "")))
