@@ -188,6 +188,11 @@ span.material-symbols-rounded {{
     -webkit-font-feature-settings: 'liga' 1;
 }}
 
+/* Hide Streamlit's native header bar (replaced by our custom nav) */
+header[data-testid="stHeader"] {{
+    display: none !important;
+}}
+
 .stApp,
 [data-testid="stAppViewContainer"],
 [data-testid="stMainBlockContainer"],
@@ -282,6 +287,8 @@ a.feat-link {{
     position: relative;
     overflow: hidden;
     flex: 1;
+    display: flex;
+    flex-direction: column;
     transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
 }}
 a.feat-link:hover .feat-card {{
@@ -325,7 +332,8 @@ a.feat-link:hover .feat-card {{
     font-weight: 700;
     padding: 0.2rem 0.7rem;
     border-radius: 20px;
-    margin-top: 0.9rem;
+    margin-top: auto;
+    align-self: center;
     letter-spacing: 0.05em;
     text-transform: uppercase;
 }}
