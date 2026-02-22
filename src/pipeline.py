@@ -10,7 +10,7 @@ import os
 from typing import Any, Dict, List
 
 import fitz  # PyMuPDF
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 from .extractors import chunk_pages, extract_raw_text, guess_title_and_date
 
@@ -237,11 +237,13 @@ def build_prebid_report(
 
     client = _get_client()
 
-    # Build full text — truncation limit depends on detail level:
-    # Low  → 80k chars  (~60k tokens)  — fast & cheap, good for bulk screening
-    # Medium → 200k chars (~150k tokens) — balanced
-    # High → 400k chars (~300k tokens) — exhaustive, within GPT-4o 128k token window
-    MAX_TEXT = {"Low": 80_000, "Medium": 200_000, "High": 400_000}.get(detail, 200_000)
+    # Build full text — truncation limit depends on detail level.
+    # Conservative defaults to stay within 30k TPM tiers; auto-retries
+    # will halve further if the request is still too large.
+    # Low  → 40k chars  (~10k tokens)  — safe for 30k TPM
+    # Medium → 80k chars (~20k tokens)  — balanced
+    # High → 120k chars (~30k tokens)  — detailed, fits 128k context
+    MAX_TEXT = {"Low": 40_000, "Medium": 80_000, "High": 120_000}.get(detail, 80_000)
 
     full_text = extract_raw_text(pages)
     fallback_title, fallback_date = guess_title_and_date(pages)
@@ -253,15 +255,25 @@ def build_prebid_report(
     system_prompt = _build_system_prompt(risk_factors, knowledge_context)
     user_prompt = _build_user_prompt(full_text, detail)
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.1,  # Low temperature for consistent structured output
-        response_format={"type": "json_object"},
-    )
+    # Retry up to 3 times, halving the document text on each 429 "too large" error.
+    for _attempt in range(4):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            break
+        except RateLimitError as exc:
+            if "tokens" not in str(exc) or _attempt == 3:
+                raise
+            # Request too large — halve the document text and rebuild prompt
+            full_text = full_text[: len(full_text) // 2] + "\n\n[Document truncated due to API token limits — upgrade OpenAI plan for longer analysis]"
+            user_prompt = _build_user_prompt(full_text, detail)
 
     raw = response.choices[0].message.content
     report = json.loads(raw)
