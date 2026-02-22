@@ -197,6 +197,8 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
     # 6 Go/No-Go
     _add_colored_heading(doc, "6. Go / No-Go Recommendation", 1, primary_hex)
     gn = report.get("go_nogo", {})
+    if not isinstance(gn, dict):
+        gn = {}
     doc.add_paragraph(f"Overall complexity score: {gn.get('score','?')} / 100")
     rec_p = doc.add_paragraph()
     rec_run = rec_p.add_run(f"Recommendation: {gn.get('recommendation','')}")
