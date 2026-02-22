@@ -33,68 +33,7 @@
   },
 
   "risk_register": {
-    "showstoppers": [
-      {
-        "id": "SS-01",
-        "name": "Proprietary/closed automation system required",
-        "description": "The tender mandates a specific competitor automation brand or requires a closed system incompatible with Inpeco's open architecture.",
-        "signals": ["must be compatible with [competitor brand]", "proprietary track", "single-vendor solution", "closed system", "integrated with existing [competitor] automation"]
-      },
-      {
-        "id": "SS-02",
-        "name": "Required analyzer not in Inpeco connectivity portfolio",
-        "description": "The tender requires mandatory connection to one or more analyzers that Inpeco does not support and cannot develop within the project timeline.",
-        "signals": ["connection to [specific analyzer]", "integration with [specific analyzer]", "validated connection required at delivery", "analyzer connectivity certified", "mandatory interface to", "must connect to"]
-      },
-      {
-        "id": "SS-03",
-        "name": "Physical space incompatible with minimum TLA footprint",
-        "description": "Available laboratory space is too small to accommodate the minimum track configuration required.",
-        "signals": ["available space", "room dimensions", "square meters", "track length", "ceiling height below 2.5m", "door width below 90cm"]
-      },
-      {
-        "id": "SS-04",
-        "name": "Mandatory blood bank or life sciences automation (not yet available)",
-        "description": "The tender requires full blood bank automation as a core deliverable, which Inpeco does not yet offer commercially.",
-        "signals": ["blood bank automation", "transfusion medicine automation", "life sciences automation", "biorepository full automation"]
-      },
-      {
-        "id": "SS-05",
-        "name": "Delivery timeline below minimum viable",
-        "description": "Required go-live date is less than 6 months from contract signature for any TLA system, making delivery technically impossible.",
-        "signals": ["go-live within 3 months", "installation within 4 months", "delivery within 6 months of signature", "fully operational by [date < 6 months from now]"]
-      },
-      {
-        "id": "SS-06",
-        "name": "Geographic location outside service coverage",
-        "description": "The installation site is in a country or region where Inpeco has no service infrastructure and cannot establish it within the project.",
-        "signals": ["remote location", "country with no local service", "service within 4 hours required", "24/7 on-site service required"]
-      },
-      {
-        "id": "SS-07",
-        "name": "Bid submission deadline less than 3 weeks away",
-        "description": "The deadline to submit the bid is less than 3 weeks from now, making it technically or commercially impossible to prepare a compliant and competitive offer.",
-        "signals": ["submission deadline", "offer due date", "tender return date", "bid deadline", "response due", "offer submission by", "scadenza offerta", "Angebotsfrist", "délai de soumission"]
-      },
-      {
-        "id": "SS-08",
-        "name": "Pre-analytics only scope — no analyzer connectivity required",
-        "description": "The tender scope is limited exclusively to pre-analytical automation (centrifuge, decapping, aliquoting, sorting) with no connection to analytical instruments. This is not Total Lab Automation and significantly reduces the business case for Inpeco's FlexLab platform.",
-        "signals": ["pre-analytical only", "pre-analytics only", "no analyzer connection", "sorting only", "centrifuge only", "aliquoting only", "without analyzer integration", "senza collegamento analizzatori", "nur Präanalytik"]
-      },
-      {
-        "id": "SS-09",
-        "name": "No compressed air allowed on site",
-        "description": "The site prohibits or does not provide compressed air, which is required by Inpeco's FlexLab pneumatic transport system. Without compressed air the track cannot function.",
-        "signals": ["no compressed air", "compressed air not available", "aria compressa non disponibile", "keine Druckluft", "pas d'air comprimé", "oil-free environment", "compressed air prohibited", "pneumatic system not allowed"]
-      },
-      {
-        "id": "SS-10",
-        "name": "HIL detection and volume measurement via laser vision through tube labels",
-        "description": "The tender requires hemolysis/icterus/lipemia (HIL) detection and/or liquid level/volume measurement using laser vision technology capable of reading through tube labels. This capability is not part of Inpeco's current product portfolio.",
-        "signals": ["HIL detection", "hemolysis detection", "icterus detection", "lipemia detection", "laser vision", "volume detection through label", "read through label", "optical volume measurement", "vision through tube wall", "serum index detection on track"]
-      }
-    ],
+    "showstoppers": [],
 
     "high_risks": [
       {
@@ -160,6 +99,70 @@
         "signals": ["dismantling", "deinstallation", "disposal", "removal of existing", "demolition of existing system", "smontaggio", "smaltimento", "Demontage", "Entsorgung", "dépose", "démantèlement", "old system removal", "existing equipment disposal"],
         "probability": 3,
         "impact": 3
+      },
+      {
+        "id": "HR-09",
+        "name": "Proprietary/closed automation system required",
+        "description": "The tender mandates a specific competitor automation brand or requires a closed system incompatible with Inpeco's open architecture. Significant risk that Inpeco cannot comply without a derogation or partnership.",
+        "signals": ["must be compatible with [competitor brand]", "proprietary track", "single-vendor solution", "closed system", "integrated with existing [competitor] automation"],
+        "probability": 4,
+        "impact": 5
+      },
+      {
+        "id": "HR-10",
+        "name": "Required analyzer not in Inpeco connectivity portfolio",
+        "description": "The tender requires mandatory connection to one or more analyzers that Inpeco does not currently support. New interface development within project timeline is uncertain.",
+        "signals": ["connection to [specific analyzer]", "integration with [specific analyzer]", "validated connection required at delivery", "analyzer connectivity certified", "mandatory interface to", "must connect to"],
+        "probability": 3,
+        "impact": 5
+      },
+      {
+        "id": "HR-11",
+        "name": "Physical space incompatible with minimum TLA footprint",
+        "description": "Available laboratory space may be too small to accommodate the minimum track configuration required. Requires early site survey to confirm feasibility.",
+        "signals": ["available space", "room dimensions", "square meters", "track length", "ceiling height below 2.5m", "door width below 90cm"],
+        "probability": 2,
+        "impact": 5
+      },
+      {
+        "id": "HR-12",
+        "name": "Mandatory blood bank or life sciences automation (not yet commercially available)",
+        "description": "The tender requires full blood bank or life sciences automation as a core deliverable. Inpeco's solution in this area is still in development and may not be ready for delivery within the project timeline.",
+        "signals": ["blood bank automation", "transfusion medicine automation", "life sciences automation", "biorepository full automation"],
+        "probability": 2,
+        "impact": 5
+      },
+      {
+        "id": "HR-13",
+        "name": "Delivery timeline critically short",
+        "description": "Required go-live date is less than 6 months from contract signature for a TLA system. Extremely difficult to achieve; requires immediate escalation and assessment of phased delivery options.",
+        "signals": ["go-live within 3 months", "installation within 4 months", "delivery within 6 months of signature", "fully operational by [date < 6 months from now]"],
+        "probability": 3,
+        "impact": 4
+      },
+      {
+        "id": "HR-14",
+        "name": "Geographic location outside or at edge of service coverage",
+        "description": "The installation site is in a country or region where Inpeco's service infrastructure is absent or minimal. Requires assessment of partner service network or establishment of new service capability.",
+        "signals": ["remote location", "country with no local service", "service within 4 hours required", "24/7 on-site service required"],
+        "probability": 2,
+        "impact": 4
+      },
+      {
+        "id": "HR-15",
+        "name": "No compressed air available or allowed on site",
+        "description": "The site does not provide or prohibits compressed air. Inpeco's FlexLab pneumatic transport system requires compressed air; a compressor supply or alternative transport design must be evaluated.",
+        "signals": ["no compressed air", "compressed air not available", "aria compressa non disponibile", "keine Druckluft", "pas d'air comprimé", "oil-free environment", "compressed air prohibited", "pneumatic system not allowed"],
+        "probability": 2,
+        "impact": 5
+      },
+      {
+        "id": "HR-16",
+        "name": "HIL detection and volume measurement via laser vision through tube labels",
+        "description": "The tender requires HIL (hemolysis/icterus/lipemia) detection and/or liquid level measurement using laser vision through tube labels. This capability is not currently in Inpeco's product portfolio and requires a technology partnership or custom development.",
+        "signals": ["HIL detection", "hemolysis detection", "icterus detection", "lipemia detection", "laser vision", "volume detection through label", "read through label", "optical volume measurement", "vision through tube wall", "serum index detection on track"],
+        "probability": 2,
+        "impact": 4
       }
     ],
 
@@ -281,6 +284,22 @@
         "name": "Project manager or service team required to speak a specific language",
         "description": "The tender explicitly requires that Inpeco's project manager, application specialists, or service engineers communicate in a specific language (e.g., local national language only). This may constrain resource allocation and staffing options.",
         "signals": ["project manager must speak", "service engineer in [language]", "local language required", "native speaker", "communication in [language]", "project team language", "lingua del team", "Sprache des Projektleiters", "langue du chef de projet", "language requirement for team"]
+      },
+      {
+        "id": "MR-16",
+        "name": "Bid submission deadline less than 3 weeks away",
+        "description": "The deadline to submit the bid is less than 3 weeks from now, making it very difficult to prepare a complete and competitive offer. Requires immediate decision and resource prioritization.",
+        "signals": ["submission deadline", "offer due date", "tender return date", "bid deadline", "response due", "offer submission by", "scadenza offerta", "Angebotsfrist", "délai de soumission"],
+        "probability": 3,
+        "impact": 3
+      },
+      {
+        "id": "MR-17",
+        "name": "Pre-analytics only scope — limited or no analyzer connectivity",
+        "description": "The tender scope is limited to pre-analytical automation only (centrifuge, decapping, aliquoting, sorting) with no or minimal analyzer connectivity. Reduces strategic value and FlexLab business case; assess whether partial scope is still commercially viable.",
+        "signals": ["pre-analytical only", "pre-analytics only", "no analyzer connection", "sorting only", "centrifuge only", "aliquoting only", "without analyzer integration", "senza collegamento analizzatori", "nur Präanalytik"],
+        "probability": 2,
+        "impact": 3
       }
     ]
   }
