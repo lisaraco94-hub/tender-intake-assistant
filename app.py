@@ -1518,7 +1518,119 @@ def _render_report(report: dict):
             unsafe_allow_html=True,
         )
 
-    # ── Download button (top, prominent) ──────────────────────────
+    # ── Verdict banner ─────────────────────────────────────────────
+    go_nogo   = report.get("go_nogo", {})
+    rec       = go_nogo.get("recommendation", "—")
+    score     = go_nogo.get("score", 0)
+    rationale = go_nogo.get("rationale", "")
+    icons   = {"GO": "✅", "GO with Mitigation": "⚠️", "NO-GO": "🚫"}
+    classes = {"GO": "verdict-go", "GO with Mitigation": "verdict-go-mit", "NO-GO": "verdict-nogo"}
+    st.markdown(f"""
+    <div class="{classes.get(rec, 'verdict-go')}">
+      <div class="verdict-label">{icons.get(rec, "⚪")} {rec}</div>
+      <div class="verdict-score">Complexity score: {score} / 100</div>
+      <div class="verdict-rationale">{rationale}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Key metrics ────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Tender type",  (report.get("tender_type") or "—").upper())
+    c2.metric("Deadline",      report.get("submission_deadline") or "—")
+    c3.metric("Est. value",    report.get("estimated_value_eur") or "—")
+    city_disp    = report.get("city", "")
+    country_disp = report.get("country", "")
+    loc = f"{city_disp} ({country_disp})" if city_disp and country_disp else (city_disp or country_disp or "—")
+    c4.metric("Location", loc[:28])
+
+    # ── Executive Summary ──────────────────────────────────────────
+    st.markdown('<div class="section-heading">Executive Summary</div>', unsafe_allow_html=True)
+    for line in report.get("executive_summary", []):
+        st.markdown(f"- {line}")
+
+    # ── Showstoppers ───────────────────────────────────────────────
+    showstoppers = report.get("showstoppers", [])
+    if showstoppers:
+        st.markdown(
+            f'<div class="section-heading section-heading-orange">🚨 Showstoppers ({len(showstoppers)}) — NO-GO</div>',
+            unsafe_allow_html=True,
+        )
+        for ss in showstoppers:
+            if not isinstance(ss, dict):
+                st.markdown(f"- {ss}")
+                continue
+            doc_ref = ss.get("document_ref", "")
+            ref_line = f" · 📄 {doc_ref}" if doc_ref else ""
+            st.markdown(f"""
+<div class="ss-card">
+  <div class="ss-id">{ss.get("id", "SS")}</div>
+  <div class="ss-desc">{ss.get("description", "")}</div>
+  <div class="ss-evidence">Evidence: {ss.get("evidence", "—")} · Impact: {ss.get("impact", "—")}{ref_line}</div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Key Deadlines & Milestones ─────────────────────────────────
+    deadlines = report.get("deadlines", [])
+    st.markdown('<div class="section-heading">Key Deadlines & Milestones</div>', unsafe_allow_html=True)
+    if deadlines:
+        for d in deadlines:
+            if not isinstance(d, dict):
+                st.markdown(f"- {d}")
+                continue
+            ev = d.get("evidence", "")
+            ev_part = f"  \n  *{ev}*" if ev else ""
+            st.markdown(f"- **{d.get('when','?')}** — {d.get('milestone','')}{ev_part}")
+    else:
+        st.markdown('<p class="info-box">No specific dates identified in the document.</p>', unsafe_allow_html=True)
+
+    # ── Requirements ───────────────────────────────────────────────
+    reqs = report.get("requirements", {})
+    st.markdown('<div class="section-heading">Requirements & Constraints</div>', unsafe_allow_html=True)
+    if reqs:
+        for key, items in reqs.items():
+            if items:
+                st.markdown(f"**{key.replace('_', ' ').title()}**")
+                for item in items:
+                    if isinstance(item, dict):
+                        st.markdown(f"- {item.get('text', str(item))}")
+                    else:
+                        st.markdown(f"- {item}")
+    else:
+        st.markdown('<p class="info-box">No requirements extracted.</p>', unsafe_allow_html=True)
+
+    # ── Deliverables ───────────────────────────────────────────────
+    deliverables = report.get("deliverables", [])
+    st.markdown('<div class="section-heading">Deliverables to Prepare</div>', unsafe_allow_html=True)
+    if deliverables:
+        for item in deliverables:
+            st.markdown(f"- {item}")
+    else:
+        st.markdown('<p class="info-box">No deliverables listed.</p>', unsafe_allow_html=True)
+
+    # ── Risk Register ──────────────────────────────────────────────
+    risks = report.get("risks", [])
+    st.markdown('<div class="section-heading">Risk Register</div>', unsafe_allow_html=True)
+    if risks:
+        risks_dicts = [r for r in risks if isinstance(r, dict)]
+        if risks_dicts:
+            df = pd.DataFrame(risks_dicts)
+            ordered = [c for c in ["id", "risk", "category", "level", "score", "document_ref", "evidence", "mitigation"] if c in df.columns]
+            df_sorted = df[ordered].sort_values(
+                "score", ascending=False,
+                key=lambda s: pd.to_numeric(s, errors="coerce").fillna(0)
+            ) if "score" in df.columns else df[ordered]
+            st.dataframe(df_sorted, use_container_width=True, hide_index=True)
+    else:
+        st.markdown('<p class="info-box">No risks identified.</p>', unsafe_allow_html=True)
+
+    # ── Open Questions ─────────────────────────────────────────────
+    open_qs = report.get("open_questions", [])
+    if open_qs:
+        st.markdown('<div class="section-heading">Open Questions</div>', unsafe_allow_html=True)
+        for q in open_qs:
+            st.markdown(f"- {q}")
+
+    # ── Download + API usage ───────────────────────────────────────
+    st.divider()
     col_dl, col_meta = st.columns([2, 1])
     with col_dl:
         try:
@@ -1543,138 +1655,6 @@ def _render_report(report: dict):
                 st.caption(f"Sections: {meta.get('pages_analyzed',0)}")
                 if meta.get("truncated"):
                     st.caption(f"⚠️ Truncated at {meta.get('chars_analyzed',0):,} chars")
-
-    # ── White report container opens ───────────────────────────────
-    st.markdown('<div class="report-page">', unsafe_allow_html=True)
-
-    # ── Verdict banner ─────────────────────────────────────────────
-    go_nogo   = report.get("go_nogo", {})
-    rec       = go_nogo.get("recommendation", "—")
-    score     = go_nogo.get("score", 0)
-    rationale = go_nogo.get("rationale", "")
-    icons   = {"GO": "✅", "GO with Mitigation": "⚠️", "NO-GO": "🚫"}
-    vcls    = {"GO": "rpt-verdict-go", "GO with Mitigation": "rpt-verdict-go-mit", "NO-GO": "rpt-verdict-nogo"}
-    st.markdown(f"""
-    <div class="{vcls.get(rec, 'rpt-verdict-go')} rpt-verdict">
-      <div class="rpt-verdict-label">{icons.get(rec, "⚪")} {rec}</div>
-      <div class="rpt-verdict-score">Feasibility score: {score} / 100</div>
-      <div class="rpt-verdict-rationale">{rationale}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Key metrics ────────────────────────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Tender type",  (report.get("tender_type") or "—").upper())
-    c2.metric("Deadline",      report.get("submission_deadline") or "—")
-    c3.metric("Est. value",    report.get("estimated_value_eur") or "—")
-    authority = report.get("contracting_authority") or "—"
-    city_disp = report.get("city", "")
-    country_disp = report.get("country", "")
-    loc = f"{city_disp} ({country_disp})" if city_disp and country_disp else (city_disp or country_disp or "—")
-    c4.metric("Location", loc[:28])
-
-    # ── Executive Summary ──────────────────────────────────────────
-    st.markdown('<div class="rpt-h1">Executive Summary</div>', unsafe_allow_html=True)
-    items_html = "".join(f'<div class="rpt-bullet-item">• {line}</div>' for line in report.get("executive_summary", []))
-    st.markdown(items_html or '<p style="color:#8aa0b8;font-size:0.85rem;">No summary available.</p>', unsafe_allow_html=True)
-
-    # ── Showstoppers ───────────────────────────────────────────────
-    showstoppers = report.get("showstoppers", [])
-    if showstoppers:
-        st.markdown(
-            f'<div class="rpt-h1 rpt-h1-orange">🚨 Showstoppers ({len(showstoppers)}) — NO-GO</div>',
-            unsafe_allow_html=True,
-        )
-        for ss in showstoppers:
-            doc_ref = ss.get("document_ref", "")
-            evidence = ss.get("evidence", "")
-            ref_html = f'<div class="rpt-ss-ref">📄 {doc_ref}</div>' if doc_ref else ""
-            st.markdown(f"""
-<div class="rpt-ss-card">
-  <div class="rpt-ss-id">{ss.get("id", "SS")}</div>
-  <div class="rpt-ss-desc">{ss.get("description", "")}</div>
-  {ref_html}
-  <div class="rpt-ss-ev">Evidence: {evidence} — Impact: {ss.get("impact","—")}</div>
-</div>""", unsafe_allow_html=True)
-
-    # ── Key Deadlines & Milestones ─────────────────────────────────
-    deadlines = report.get("deadlines", [])
-    st.markdown('<div class="rpt-h1">Key Deadlines & Milestones</div>', unsafe_allow_html=True)
-    if deadlines:
-        rows_html = ""
-        for d in deadlines:
-            rows_html += (
-                f'<div class="rpt-deadline-row">'
-                f'<span class="rpt-deadline-when">{d.get("when","?")}</span>'
-                f'<span>{d.get("milestone","")}'
-                + (f'<br><span class="rpt-deadline-ev">{d.get("evidence","")}</span>' if d.get("evidence") else "")
-                + '</span></div>'
-            )
-        st.markdown(rows_html, unsafe_allow_html=True)
-    else:
-        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No specific dates identified.</p>', unsafe_allow_html=True)
-
-    # ── Requirements ───────────────────────────────────────────────
-    reqs = report.get("requirements", {})
-    st.markdown('<div class="rpt-h1">Requirements & Constraints</div>', unsafe_allow_html=True)
-    if reqs:
-        for key, items in reqs.items():
-            if items:
-                st.markdown(f"**{key.replace('_', ' ').title()}**")
-                items_html = "".join(f'<div class="rpt-bullet-item">• {item}</div>' for item in items)
-                st.markdown(items_html, unsafe_allow_html=True)
-    else:
-        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No requirements extracted.</p>', unsafe_allow_html=True)
-
-    # ── Deliverables ───────────────────────────────────────────────
-    deliverables = report.get("deliverables", [])
-    st.markdown('<div class="rpt-h1">Deliverables to Prepare</div>', unsafe_allow_html=True)
-    if deliverables:
-        items_html = "".join(f'<div class="rpt-bullet-item">• {item}</div>' for item in deliverables)
-        st.markdown(items_html, unsafe_allow_html=True)
-    else:
-        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No deliverables listed.</p>', unsafe_allow_html=True)
-
-    # ── Risk Register ──────────────────────────────────────────────
-    risks = report.get("risks", [])
-    st.markdown('<div class="rpt-h1">Risk Register</div>', unsafe_allow_html=True)
-    if risks:
-        level_cls = {"High": "rpt-risk-card-high", "Medium": "rpt-risk-card-medium", "Low": "rpt-risk-card-low"}
-        badge_cls = {"High": "level-high", "Medium": "level-medium", "Low": "level-low"}
-        sorted_risks = sorted(risks, key=lambda r: r.get("score", 0), reverse=True)
-        for r in sorted_risks:
-            lvl = r.get("level", "Medium")
-            doc_ref = r.get("document_ref", "")
-            ref_html = f'<div class="rpt-risk-ref">📄 {doc_ref}</div>' if doc_ref else ""
-            mit = r.get("mitigation", "")
-            mit_html = f'<div class="rpt-risk-mit">💡 {mit}</div>' if mit else ""
-            st.markdown(f"""
-<div class="rpt-risk-card {level_cls.get(lvl, '')}">
-  <div style="display:flex;flex-direction:column;align-items:center;min-width:2.8rem;">
-    <div class="rpt-risk-score">{r.get("score","—")}</div>
-    <div class="rpt-risk-score-label">score</div>
-    <div style="margin-top:0.4rem;"><span class="rpt-risk-level {badge_cls.get(lvl,'')}">{lvl}</span></div>
-  </div>
-  <div class="rpt-risk-body">
-    <div class="rpt-risk-name">{r.get("risk","")}</div>
-    <div class="rpt-risk-cat">{r.get("category","")}</div>
-    {ref_html}
-    <div class="rpt-risk-ev">{r.get("evidence","")}</div>
-    {mit_html}
-  </div>
-</div>""", unsafe_allow_html=True)
-    else:
-        st.markdown('<p style="color:#8aa0b8;font-size:0.85rem;">No risks identified.</p>', unsafe_allow_html=True)
-
-    # ── Open Questions ─────────────────────────────────────────────
-    open_qs = report.get("open_questions", [])
-    if open_qs:
-        st.markdown('<div class="rpt-h1">Open Questions</div>', unsafe_allow_html=True)
-        items_html = "".join(f'<div class="rpt-bullet-item">• {q}</div>' for q in open_qs)
-        st.markdown(items_html, unsafe_allow_html=True)
-
-    # ── Close white container ──────────────────────────────────────
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ─── Router ───────────────────────────────────────────────────────
