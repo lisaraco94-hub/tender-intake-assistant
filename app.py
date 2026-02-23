@@ -30,8 +30,11 @@ NAVY     = "#003865"   # Inpeco navy
 LIGHT_BG = "#F4F7FA"
 WHITE    = "#FFFFFF"
 
+# ─── Absolute base dir (resolves regardless of CWD) ──────────────
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # ─── Library persistence ─────────────────────────────────────────
-LIBRARY_PATH = "assets/tender_library.json"
+LIBRARY_PATH = os.path.join(_APP_DIR, "assets", "tender_library.json")
 
 
 def load_library() -> list:
@@ -51,7 +54,7 @@ def save_to_library(entry: dict):
         json.dump(lib, f, ensure_ascii=False, indent=2)
 
 
-RISK_FACTORS_PATH = "assets/risk_factors.json"
+RISK_FACTORS_PATH = os.path.join(_APP_DIR, "assets", "risk_factors.json")
 
 
 def save_risk_factors(rf: dict):
@@ -250,6 +253,8 @@ if "run_done" not in st.session_state:
     st.session_state.run_done = False
 if "detail" not in st.session_state:
     st.session_state.detail = "Medium"
+if "lib_selected" not in st.session_state:
+    st.session_state.lib_selected = None   # index into load_library() for drill-down
 
 # ─── Global CSS + Montserrat ──────────────────────────────────────
 st.markdown(f"""
@@ -551,6 +556,43 @@ a.feat-link:hover .feat-card {{
 .badge-go   {{ background: #d4f5e5; color: #1a7a48; }}
 .badge-mit  {{ background: #fef0c7; color: #a06000; }}
 .badge-nogo {{ background: #fde8e8; color: #c0392b; }}
+
+/* ── Library: clickable row ── */
+.lib-row {{ cursor: pointer; transition: box-shadow 0.15s, transform 0.12s; }}
+.lib-row:hover {{ box-shadow: 0 6px 20px rgba(0,174,239,0.18); transform: translateY(-1px); }}
+
+/* ── Portfolio Insights panel ── */
+.insights-panel {{
+    background: linear-gradient(135deg, {NAVY} 0%, #005a96 100%);
+    border-radius: 14px;
+    padding: 1.5rem 1.8rem 1.6rem;
+    margin-bottom: 1.8rem;
+    color: white;
+}}
+.insights-title {{
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: {PRIMARY};
+    letter-spacing: 0.02em;
+    margin-bottom: 1rem;
+}}
+.insight-tag {{
+    display: inline-block;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(0,174,239,0.4);
+    border-radius: 20px;
+    padding: 0.22rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #e0f4ff;
+    margin: 0.2rem 0.2rem 0.2rem 0;
+    white-space: nowrap;
+}}
+.insight-tag-hot {{
+    background: rgba(247,148,29,0.25);
+    border-color: {ORANGE};
+    color: #ffe0b2;
+}}
 
 /* ── Report page: white container ── */
 .report-page {{
@@ -1205,6 +1247,7 @@ def view_analyze():
                         "score":         report.get("go_nogo", {}).get("score", 0),
                         "summary":       ai_desc,
                         "files":         [f.name for f in uploaded_files],
+                        "report":        report,   # full JSON for drill-down + Word export
                     })
                     st.rerun()
                 except Exception as e:
@@ -1214,17 +1257,149 @@ def view_analyze():
         _render_report(st.session_state.report)
 
 
+# ─── LIBRARY helpers ──────────────────────────────────────────────
+
+def _portfolio_insights(lib: list):
+    """Render the Portfolio Risk Insights panel from all stored reports."""
+    from collections import Counter
+    import re
+
+    entries_with_report = [e for e in lib if e.get("report")]
+    if not entries_with_report:
+        return  # nothing to aggregate yet
+
+    # ── Collect data ──
+    risk_categories: Counter = Counter()
+    risk_levels: Counter     = Counter()
+    countries: Counter       = Counter()
+    verdicts: Counter        = Counter()
+    req_keywords: Counter    = Counter()
+
+    # Keywords/themes to track across requirements
+    _THEMES = [
+        "ISO 13485", "ISO 9001", "ISO 27001", "CE mark", "CE marking",
+        "IVD", "IVDR", "MDR", "GMP", "FDA", "GDPR",
+        "local service", "local support", "training",
+        "warranty", "maintenance", "spare parts",
+        "integration", "LIS", "LIMS", "HL7", "ASTM",
+        "throughput", "capacity", "uptime", "SLA",
+        "financial guarantee", "bank guarantee", "performance bond",
+        "references", "past experience", "turnover",
+        "public tender", "framework agreement",
+    ]
+
+    for entry in entries_with_report:
+        r = entry["report"]
+        country = (entry.get("country") or r.get("country") or "Unknown").strip()
+        if country:
+            countries[country] += 1
+        verdicts[entry.get("verdict", "—")] += 1
+
+        for risk in r.get("risks", []):
+            if isinstance(risk, dict):
+                cat = risk.get("category", "")
+                lvl = risk.get("level", "")
+                if cat:
+                    risk_categories[cat] += 1
+                if lvl:
+                    risk_levels[lvl] += 1
+
+        # Flatten all requirement text
+        full_text = json.dumps(r.get("requirements", {}), ensure_ascii=False).lower()
+        full_text += json.dumps(r.get("executive_summary", []), ensure_ascii=False).lower()
+        for theme in _THEMES:
+            if theme.lower() in full_text:
+                req_keywords[theme] += 1
+
+    if not (risk_categories or req_keywords):
+        return
+
+    # ── Render ──
+    st.markdown("""
+    <div class="insights-panel">
+      <div class="insights-title">📊 Portfolio Risk Insights</div>
+    """, unsafe_allow_html=True)
+
+    cols = st.columns([1, 1, 2])
+
+    with cols[0]:
+        st.markdown("**Top risk categories**")
+        for cat, cnt in risk_categories.most_common(5):
+            st.markdown(f"- {cat} &nbsp;<span style='color:#7dd3fc;font-size:0.78rem;'>×{cnt}</span>", unsafe_allow_html=True)
+
+    with cols[1]:
+        st.markdown("**Countries**")
+        for co, cnt in countries.most_common(6):
+            st.markdown(f"- {co} &nbsp;<span style='color:#7dd3fc;font-size:0.78rem;'>×{cnt}</span>", unsafe_allow_html=True)
+
+    with cols[2]:
+        if req_keywords:
+            st.markdown("**Recurring requirements across tenders**")
+            tags_html = ""
+            for kw, cnt in req_keywords.most_common(20):
+                cls = "insight-tag-hot" if cnt >= 2 else "insight-tag"
+                tags_html += f'<span class="{cls}">{kw} ×{cnt}</span> '
+            st.markdown(tags_html, unsafe_allow_html=True)
+            if any(cnt >= 2 for _, cnt in req_keywords.items()):
+                st.markdown(
+                    '<p style="font-size:0.72rem;color:rgba(255,255,255,0.55);margin-top:0.6rem;">'
+                    'Highlighted tags appear in 2 or more tenders.</p>',
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 # ─── LIBRARY ──────────────────────────────────────────────────────
 def view_library():
     _nav("library")
 
+    lib = load_library()
+
+    # ── Detail view: full report for a selected entry ──────────────
+    sel = st.session_state.get("lib_selected")
+    if sel is not None:
+        if st.button("← Back to Library", key="lib_back_detail"):
+            st.session_state.lib_selected = None
+            st.rerun()
+
+        entry = lib[sel] if 0 <= sel < len(lib) else None
+        if entry is None:
+            st.session_state.lib_selected = None
+            st.rerun()
+
+        display_title = entry.get("display_title") or entry.get("title") or "Report"
+        st.markdown(f'<div class="section-heading">{display_title}</div>', unsafe_allow_html=True)
+
+        rpt = entry.get("report")
+        if rpt:
+            _render_report(rpt)
+            # Word download button (mirrors the one in view_analyze)
+            st.divider()
+            try:
+                docx_bytes = build_docx(rpt, PRIMARY, ORANGE)
+                safe = display_title[:40].replace(" ", "_")
+                st.download_button(
+                    "⬇️ Download Word Report",
+                    data=docx_bytes,
+                    file_name=f"Tender_Intake_{safe}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True,
+                    type="primary",
+                )
+            except Exception as e:
+                st.warning(f"Could not generate Word report: {e}")
+        else:
+            st.info("Full report not available for this entry — it was analysed before report storage was added. Re-run the analysis to enable drill-down.")
+        return
+
+    # ── List view ──────────────────────────────────────────────────
     if st.button("← Back to Home", key="back_library"):
         st.session_state.view = "home"
         st.rerun()
 
     st.markdown('<div class="section-heading">Tender Library</div>', unsafe_allow_html=True)
 
-    lib = load_library()
     if not lib:
         st.markdown("""
         <div class="empty-state">
@@ -1235,7 +1410,10 @@ def view_library():
         """, unsafe_allow_html=True)
         return
 
-    # Stats
+    # ── Portfolio Risk Insights ────────────────────────────────────
+    _portfolio_insights(lib)
+
+    # ── Stats ──────────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total analysed", len(lib))
     c2.metric("GO", sum(1 for e in lib if e.get("verdict") == "GO"))
@@ -1244,9 +1422,10 @@ def view_library():
 
     st.markdown('<div class="section-heading" style="margin-top:1.8rem;">All Tenders</div>', unsafe_allow_html=True)
 
+    # ── Full-text search (title + client + country + summary + full report JSON) ──
     search = st.text_input(
         "search",
-        placeholder="🔍  Filter by title, client, country…",
+        placeholder="🔍  Search by any word — title, client, country, ISO number, requirement…",
         label_visibility="collapsed",
     )
     filtered = lib
@@ -1256,31 +1435,33 @@ def view_library():
             e for e in lib
             if q in (
                 (e.get("title") or "") +
+                (e.get("display_title") or "") +
                 (e.get("client") or "") +
                 (e.get("country") or "") +
-                (e.get("summary") or "")
+                (e.get("summary") or "") +
+                json.dumps(e.get("report") or {}, ensure_ascii=False)
             ).lower()
         ]
 
     st.caption(f"{len(filtered)} result(s)")
 
-    lib_full = load_library()  # full list for delete operations
+    lib_full = load_library()  # reload for delete operations
 
     for idx, entry in enumerate(filtered):
-        # Find real index in full library (needed for delete)
         real_idx = next(
-            (i for i, e in enumerate(lib_full) if e == entry),
+            (i for i, e in enumerate(lib_full) if e.get("date") == entry.get("date")
+             and e.get("display_title") == entry.get("display_title")),
             None,
         )
         v = entry.get("verdict", "—")
         row_cls   = "lib-row" + (" lib-row-nogo" if v == "NO-GO" else " lib-row-mit" if "Mitigation" in v else "")
         badge_cls = "badge-nogo" if v == "NO-GO" else ("badge-mit" if "Mitigation" in v else "badge-go")
 
-        # display_title = "Client – City (Country)" or fall back to old title
         display_title = entry.get("display_title") or entry.get("client") or entry.get("title") or "—"
         date_score = f"📅 {entry.get('date','—')} &nbsp;·&nbsp; Score: {entry.get('score','—')}/100"
+        has_report = bool(entry.get("report"))
 
-        col_card, col_del = st.columns([20, 1])
+        col_card, col_view, col_del = st.columns([18, 2, 1])
         with col_card:
             st.markdown(f"""
             <div class="{row_cls}">
@@ -1294,8 +1475,22 @@ def view_library():
               </div>
             </div>
             """, unsafe_allow_html=True)
+        with col_view:
+            st.markdown("<div style='margin-top:0.6rem;'></div>", unsafe_allow_html=True)
+            btn_label = "📄 Report" if has_report else "📄 —"
+            btn_help  = "Open full report" if has_report else "No report stored (re-run analysis)"
+            if st.button(btn_label, key=f"view_lib_{idx}", help=btn_help, disabled=not has_report):
+                # Find the actual index in the full (unfiltered) library
+                full_idx = next(
+                    (i for i, e in enumerate(lib) if e.get("date") == entry.get("date")
+                     and e.get("display_title") == entry.get("display_title")),
+                    None,
+                )
+                if full_idx is not None:
+                    st.session_state.lib_selected = full_idx
+                    st.rerun()
         with col_del:
-            st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:0.6rem;'></div>", unsafe_allow_html=True)
             if real_idx is not None and st.button("🗑", key=f"del_lib_{idx}", help="Delete from history"):
                 lib_full.pop(real_idx)
                 with open(LIBRARY_PATH, "w", encoding="utf-8") as f:
@@ -1304,7 +1499,10 @@ def view_library():
 
     if filtered:
         st.divider()
-        df_e = pd.DataFrame(filtered)
+        df_e = pd.DataFrame([
+            {k: v for k, v in e.items() if k != "report"}  # skip nested JSON in CSV
+            for e in filtered
+        ])
         cols = [c for c in ["date", "display_title", "client", "city", "country", "verdict", "score", "summary"] if c in df_e.columns]
         st.download_button(
             "⬇️ Export as CSV",
