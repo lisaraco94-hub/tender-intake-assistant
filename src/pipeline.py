@@ -37,14 +37,21 @@ def read_pdf_pages(pdf_bytes: bytes) -> List[str]:
 
 
 # ─── Risk factors loader ──────────────────────────────────────────
+_ASSETS_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+)
 
-def load_risk_factors(path: str = "assets/risk_factors.json") -> Dict[str, Any]:
+
+def load_risk_factors(path: str | None = None) -> Dict[str, Any]:
     """Load company-specific risk factors.
 
-    If the user file does not exist yet (e.g. fresh deployment), copy the
-    committed seed file so user edits are never overwritten by git.
+    Uses an absolute path so it works regardless of CWD.
+    If the user file does not exist yet (e.g. fresh deployment), it is
+    copied from the committed seed file.
     """
     import shutil as _shutil
+    if path is None:
+        path = os.path.join(_ASSETS_DIR, "risk_factors.json")
     if not os.path.exists(path):
         seed = os.path.splitext(path)[0] + ".seed.json"
         if os.path.exists(seed):
