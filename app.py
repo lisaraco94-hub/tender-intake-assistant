@@ -974,12 +974,12 @@ a.feat-link:hover .feat-card {{
 }}
 [data-testid="stPlotlyChart"] {{
     flex: none !important;
-    height: 1600px !important;
-    min-height: 1600px !important;
+    height: 600px !important;
+    min-height: 600px !important;
 }}
 [data-testid="stPlotlyChart"] iframe {{
-    height: 1600px !important;
-    min-height: 1600px !important;
+    height: 600px !important;
+    min-height: 600px !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -1597,7 +1597,7 @@ def _portfolio_insights(lib: list):
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0, r=0, t=0, b=0),
                 coloraxis_showscale=False,
-                height=1600,
+                height=600,
                 autosize=True,
                 uirevision="constant",
                 dragmode=False,
