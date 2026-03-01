@@ -972,15 +972,6 @@ a.feat-link:hover .feat-card {{
     background: rgba(255,255,255,0.18) !important;
     border-color: rgba(255,255,255,0.5) !important;
 }}
-[data-testid="stPlotlyChart"] {{
-    flex: none !important;
-    height: 640px !important;
-    min-height: 640px !important;
-}}
-[data-testid="stPlotlyChart"] iframe {{
-    height: 640px !important;
-    min-height: 640px !important;
-}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1302,8 +1293,9 @@ def view_analyze():
 def _portfolio_insights(lib: list):
     """Render the Portfolio Risk Insights panel from all stored reports."""
     from collections import Counter
-    import plotly.express as px
-    import plotly.graph_objects as go
+    import folium
+    import re
+    from streamlit_folium import st_folium
 
     entries_with_report = [e for e in lib if e.get("report")]
     if not entries_with_report:
@@ -1544,91 +1536,83 @@ def _portfolio_insights(lib: list):
         st.markdown("**Tenders by country** — click to filter tags")
 
         if map_rows:
-            df_map = pd.DataFrame(map_rows)
+            tender_iso3 = {row["iso3"] for row in map_rows}
+            _sel = st.session_state["map_selected_iso3"]
 
-            _sel_iso3 = st.session_state["map_selected_iso3"]
-            df_unsel = df_map[~df_map["iso3"].isin(_sel_iso3)]
-            df_sel   = df_map[df_map["iso3"].isin(_sel_iso3)]
+            @st.cache_data(show_spinner=False)
+            def _load_world_geojson():
+                import requests
+                resp = requests.get(
+                    "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                return resp.json()
 
-            fig = px.choropleth(
-                df_unsel,
-                locations="iso3",
-                color="count",
-                hover_name="country",
-                hover_data={"iso3": False, "count": True},
-                color_continuous_scale=[
-                    [0.0, "rgba(0,120,200,0.35)"],
-                    [1.0, "#00AEEF"],
-                ],
-                labels={"count": "Tenders"},
-            )
+            def _style(feature):
+                iso3 = feature["properties"].get("ISO_A3", "")
+                if iso3 in _sel:
+                    return {"fillColor": "#FF6B00", "color": "white",
+                            "weight": 0.5, "fillOpacity": 0.85, "opacity": 0.2}
+                if iso3 in tender_iso3:
+                    return {"fillColor": "#1E6091", "color": "white",
+                            "weight": 0.5, "fillOpacity": 0.85, "opacity": 0.2}
+                return {"fillColor": "#4A4A4A", "color": "white",
+                        "weight": 0.5, "fillOpacity": 0.60, "opacity": 0.2}
 
-            if not df_sel.empty:
-                fig.add_trace(go.Choropleth(
-                    locations=df_sel["iso3"],
-                    z=[1] * len(df_sel),
-                    colorscale=[[0, "#FF6B00"], [1, "#FF6B00"]],
-                    showscale=False,
-                    hovertext=df_sel["country"],
-                    hovertemplate="%{hovertext}<extra></extra>",
-                    marker_line_color="rgba(255,255,255,0.5)",
-                    marker_line_width=1.0,
+            def _highlight(feature):
+                if feature["properties"].get("ISO_A3", "") in tender_iso3:
+                    return {"fillOpacity": 1.0, "weight": 1.0, "opacity": 0.5}
+                return {}
+
+            try:
+                world_geo = _load_world_geojson()
+            except Exception:
+                world_geo = None
+
+            if world_geo:
+                m = folium.Map(
+                    location=[20, 0],
+                    zoom_start=2,
+                    tiles=None,
+                    zoom_control=False,
+                    scrollWheelZoom=False,
+                    dragging=False,
+                    doubleClickZoom=False,
+                    attributionControl=False,
+                )
+                m.get_root().html.add_child(folium.Element(
+                    '<style>.leaflet-container { background: #00142E !important; }</style>'
                 ))
+                folium.GeoJson(
+                    world_geo,
+                    style_function=_style,
+                    highlight_function=_highlight,
+                    tooltip=folium.GeoJsonTooltip(
+                        fields=["ISO_A3"],
+                        labels=False,
+                        sticky=False,
+                    ),
+                ).add_to(m)
 
-            fig.update_layout(
-                geo=dict(
-                    bgcolor="rgba(0,0,0,0)",
-                    lakecolor="rgba(0,30,60,0.8)",
-                    landcolor="rgba(255,255,255,0.06)",
-                    showframe=False,
-                    showcoastlines=True,
-                    coastlinecolor="rgba(255,255,255,0.18)",
-                    showland=True,
-                    showcountries=True,
-                    countrycolor="rgba(255,255,255,0.12)",
-                    showocean=True,
-                    oceancolor="rgba(0,20,50,0.7)",
-                    projection=dict(type="natural earth"),
-                    lataxis=dict(range=[-60, 85]),
-                    lonaxis=dict(range=[-180, 180]),
-                    domain=dict(x=[0, 1], y=[0, 1]),
-                ),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                margin=dict(l=0, r=0, t=0, b=0),
-                coloraxis_showscale=False,
-                height=600,
-                autosize=True,
-                uirevision="constant",
-                dragmode=False,
-                clickmode="event+select",
-            )
-            fig.update_traces(
-                marker_line_color="rgba(255,255,255,0.25)",
-                marker_line_width=0.5,
-                selector=dict(type="choropleth"),
-            )
+                map_data = st_folium(m, width="100%", height=400, key="portfolio_map")
 
-            event = st.plotly_chart(
-                fig,
-                width='stretch',
-                on_select="rerun",
-                key="portfolio_map",
-                config={"displayModeBar": False},
-            )
-            sel_points = (
-                event.selection.get("points", [])
-                if event and hasattr(event, "selection") and event.selection
-                else []
-            )
-            clicked_iso3 = {p.get("location", "") for p in sel_points if p.get("location")}
-            # Toggle: clicking the same selection again clears it
-            if clicked_iso3 and clicked_iso3 == st.session_state["map_selected_iso3"]:
-                st.session_state["map_selected_iso3"] = set()
-            elif clicked_iso3:
-                st.session_state["map_selected_iso3"] = clicked_iso3
-            elif not sel_points:
-                st.session_state["map_selected_iso3"] = set()
+                raw_tip = (map_data or {}).get("last_object_clicked_tooltip") or ""
+                clicked_iso3 = re.sub(r"<[^>]+>", "", raw_tip).strip()
+                last_clicked = (map_data or {}).get("last_clicked")
+
+                prev_clicked = st.session_state.get("_map_last_clicked")
+                if last_clicked != prev_clicked:
+                    st.session_state["_map_last_clicked"] = last_clicked
+                    if not clicked_iso3:
+                        st.session_state["map_selected_iso3"] = set()
+                    elif clicked_iso3 in tender_iso3:
+                        sel = set(st.session_state["map_selected_iso3"])
+                        if clicked_iso3 in sel:
+                            sel.discard(clicked_iso3)
+                        else:
+                            sel.add(clicked_iso3)
+                        st.session_state["map_selected_iso3"] = sel
 
             selected_names = [
                 _ISO3_TO_NAME.get(iso, iso)
