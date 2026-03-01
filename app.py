@@ -1268,18 +1268,69 @@ def _portfolio_insights(lib: list):
     if not entries_with_report:
         return  # nothing to aggregate yet
 
-    # Keywords/themes to track across requirements
-    _THEMES = [
-        "ISO 13485", "ISO 9001", "ISO 27001", "CE mark", "CE marking",
-        "IVD", "IVDR", "MDR", "GMP", "FDA", "GDPR",
-        "local service", "local support", "training",
-        "warranty", "maintenance", "spare parts",
-        "integration", "LIS", "LIMS", "HL7", "ASTM",
-        "throughput", "capacity", "uptime", "SLA",
-        "financial guarantee", "bank guarantee", "performance bond",
-        "references", "past experience", "turnover",
-        "public tender", "framework agreement",
+    import re as _re
+
+    # ── Named-entity patterns per category: (regex, canonical_label) ──
+    # Matched against the specific structured report fields, not free text.
+    _CERTS = [
+        (r"ISO[\s\-]?13485", "ISO 13485"),
+        (r"ISO[\s\-]?9001", "ISO 9001"),
+        (r"ISO[\s\-]?15189", "ISO 15189"),
+        (r"ISO[\s\-]?27001", "ISO 27001"),
+        (r"ISO[\s\-]?62443", "ISO 62443"),
+        (r"ISO[\s\-]?14971", "ISO 14971"),
+        (r"CE[\s\-]?mark(?:ing)?", "CE Marking"),
+        (r"\bIVDR\b", "IVDR"),
+        (r"\bMDR\b", "MDR"),
+        (r"\bFDA\b", "FDA"),
+        (r"\bcGMP\b|\bGMP\b", "GMP"),
+        (r"\bGDPR\b", "GDPR"),
+        (r"\bIQ[/\\]OQ[/\\]PQ\b|\bIQ[/\\]OQ\b|\bOQ[/\\]PQ\b", "IQ/OQ/PQ"),
+        (r"\bCAP\b", "CAP"),
     ]
+    _ANALYZERS = [
+        (r"\bRoche\b|\bCobas\b", "Roche / Cobas"),
+        (r"\bAbbott\b|\bArchitect\b|\bAlinity\b", "Abbott"),
+        (r"\bSiemens\b|\bAtellica\b|\bAdvia\b|\bDimension\b", "Siemens"),
+        (r"\bBeckman\s*Coulter\b|\bDxC\b|\bUniCel\b", "Beckman Coulter"),
+        (r"\bSysmex\b", "Sysmex"),
+        (r"\bMindray\b", "Mindray"),
+        (r"\bHoriba\b", "Horiba"),
+        (r"\bbio\s*M[eé]rieux\b|\bVITEK\b", "bioMérieux"),
+        (r"\bTosoh\b", "Tosoh"),
+        (r"\bOrtho\s*Clinical\b|\bVitros\b", "Ortho Clinical"),
+        (r"\bSebia\b", "Sebia"),
+        (r"\bWerfen\b|\bILab\b|\bStago\b", "Werfen / Stago"),
+        (r"\bDiaSorin\b|\bLIAISON\b", "DiaSorin"),
+        (r"\bSnibe\b|\bMaglumi\b", "Snibe"),
+        (r"\bThermo\s*Fisher\b|\bBRAHMS\b", "ThermoFisher"),
+        (r"\bHologic\b", "Hologic"),
+        (r"\bSarstedt\b", "Sarstedt"),
+    ]
+    _LIS = [
+        (r"\bDedalus\b|\bDHE\b", "Dedalus"),
+        (r"\bTrakCare\b|\bInterSystems\b|\bHealthShare\b", "InterSystems"),
+        (r"\bEpic\b", "Epic"),
+        (r"\bCerner\b", "Cerner"),
+        (r"\bMeditech\b|\bMEDITECH\b", "Meditech"),
+        (r"\bMolis\b|\bHexalis\b", "Molis"),
+        (r"\bSinfonia\b", "Sinfonia"),
+        (r"\bLabVantage\b", "LabVantage"),
+        (r"\bSunquest\b", "Sunquest"),
+        (r"\bRemisol\b", "Remisol"),
+        (r"\bCliniSys\b|\bWinPath\b", "CliniSys"),
+        (r"\bHL7\b", "HL7"),
+        (r"\bASTM\b", "ASTM"),
+        (r"\bFHIR\b", "FHIR"),
+        (r"\bDICOM\b", "DICOM"),
+    ]
+
+    def _match_labels(patterns, text):
+        found = set()
+        for pattern, label in patterns:
+            if _re.search(pattern, text, _re.IGNORECASE):
+                found.add(label)
+        return found
 
     # Country name → ISO-3 mapping
     _ISO3 = {
@@ -1323,27 +1374,38 @@ def _portfolio_insights(lib: list):
     _ISO3_TO_NAME = {v: k for k, v in _ISO3.items()}
 
     # ── Collect per-entry data ──
-    countries_entries: dict = {}   # country_name → [entry, ...]
-    entry_keywords: list   = []    # [(entry, Counter), ...]
+    countries_entries: dict = {}
+    entry_tags: list = []   # [(entry, {"cert": set, "analyzer": set, "lis": set}), ...]
 
     for entry in entries_with_report:
         r = entry["report"]
         country = (entry.get("country") or r.get("country") or "").strip()
         if country:
             countries_entries.setdefault(country, []).append(entry)
-        full_text = json.dumps(r.get("requirements", {}), ensure_ascii=False).lower()
-        full_text += json.dumps(r.get("executive_summary", []), ensure_ascii=False).lower()
-        kw: Counter = Counter()
-        for theme in _THEMES:
-            if theme.lower() in full_text:
-                kw[theme] += 1
-        entry_keywords.append((entry, kw))
+        reqs = r.get("requirements", {})
+        cert_text  = " ".join(reqs.get("qualification_and_compliance", []))
+        anlzr_text = " ".join(reqs.get("analyzer_connectivity", []))
+        lis_text   = " ".join(reqs.get("it_and_middleware", []))
+        tags = {
+            "cert":     _match_labels(_CERTS,     cert_text),
+            "analyzer": _match_labels(_ANALYZERS, anlzr_text),
+            "lis":      _match_labels(_LIS,        lis_text),
+        }
+        entry_tags.append((entry, tags))
 
-    req_keywords_all: Counter = Counter()
-    for _, kw in entry_keywords:
-        req_keywords_all.update(kw)
+    def _tally(pairs):
+        cert_c: Counter = Counter()
+        anlzr_c: Counter = Counter()
+        lis_c: Counter = Counter()
+        for _, t in pairs:
+            for lbl in t["cert"]:     cert_c[lbl]  += 1
+            for lbl in t["analyzer"]: anlzr_c[lbl] += 1
+            for lbl in t["lis"]:      lis_c[lbl]   += 1
+        return cert_c, anlzr_c, lis_c
 
-    if not (countries_entries or req_keywords_all):
+    cert_all, anlzr_all, lis_all = _tally(entry_tags)
+
+    if not (countries_entries or any([cert_all, anlzr_all, lis_all])):
         return
 
     # ── Build choropleth data ──
@@ -1450,33 +1512,46 @@ def _portfolio_insights(lib: list):
                 )
 
     with cols[1]:
-        # Filter entries by selected countries; default = all
+        # Filter by country selection; default = all
         if selected_names:
             filtered_ids = {id(e) for name in selected_names for e in countries_entries.get(name, [])}
-            req_keywords: Counter = Counter()
-            for entry, kw in entry_keywords:
-                if id(entry) in filtered_ids:
-                    req_keywords.update(kw)
+            cert_c, anlzr_c, lis_c = _tally(
+                [(e, t) for e, t in entry_tags if id(e) in filtered_ids]
+            )
         else:
-            req_keywords = req_keywords_all
+            cert_c, anlzr_c, lis_c = cert_all, anlzr_all, lis_all
 
-        if req_keywords:
-            st.markdown("**Recurring requirements across tenders**")
-            tags_html = ""
-            for kw, cnt in req_keywords.most_common(20):
-                cls = "insight-tag-hot" if cnt >= 2 else "insight-tag"
-                tags_html += f'<span class="{cls}">{kw} ×{cnt}</span> '
-            st.markdown(tags_html, unsafe_allow_html=True)
-            if any(cnt >= 2 for _, cnt in req_keywords.items()):
+        sections = [
+            ("📋 Certificazioni", cert_c),
+            ("🔬 Analizzatori richiesti", anlzr_c),
+            ("💻 LIS / Protocolli", lis_c),
+        ]
+        any_found = any(c for _, c in sections)
+
+        if any_found:
+            for section_label, counter in sections:
+                if not counter:
+                    continue
                 st.markdown(
-                    '<p style="font-size:0.72rem;color:rgba(255,255,255,0.55);margin-top:0.6rem;">'
-                    'I tag evidenziati compaiono in 2 o più tender.</p>',
+                    f'<p style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.55);'
+                    f'margin:0.75rem 0 0.25rem;text-transform:uppercase;letter-spacing:0.07em;">'
+                    f'{section_label}</p>',
                     unsafe_allow_html=True,
                 )
+                tags_html = ""
+                for kw, cnt in counter.most_common(10):
+                    cls = "insight-tag-hot" if cnt >= 2 else "insight-tag"
+                    tags_html += f'<span class="{cls}">{kw} ×{cnt}</span> '
+                st.markdown(tags_html, unsafe_allow_html=True)
+            st.markdown(
+                '<p style="font-size:0.68rem;color:rgba(255,255,255,0.4);margin-top:0.8rem;">'
+                'Tag arancioni = presenti in 2+ tender.</p>',
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(
                 '<p style="font-size:0.72rem;color:rgba(255,255,255,0.45);">'
-                'Nessun requisito ricorrente trovato per la selezione.</p>',
+                'Nessun dato specifico trovato per la selezione.</p>',
                 unsafe_allow_html=True,
             )
 
