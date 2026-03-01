@@ -1262,18 +1262,11 @@ def view_analyze():
 def _portfolio_insights(lib: list):
     """Render the Portfolio Risk Insights panel from all stored reports."""
     from collections import Counter
-    import re
+    import plotly.express as px
 
     entries_with_report = [e for e in lib if e.get("report")]
     if not entries_with_report:
         return  # nothing to aggregate yet
-
-    # ── Collect data ──
-    risk_categories: Counter = Counter()
-    risk_levels: Counter     = Counter()
-    countries: Counter       = Counter()
-    verdicts: Counter        = Counter()
-    req_keywords: Counter    = Counter()
 
     # Keywords/themes to track across requirements
     _THEMES = [
@@ -1288,31 +1281,77 @@ def _portfolio_insights(lib: list):
         "public tender", "framework agreement",
     ]
 
+    # Country name → ISO-3 mapping
+    _ISO3 = {
+        "Afghanistan": "AFG", "Albania": "ALB", "Algeria": "DZA",
+        "Argentina": "ARG", "Armenia": "ARM", "Australia": "AUS",
+        "Austria": "AUT", "Azerbaijan": "AZE", "Bahrain": "BHR",
+        "Bangladesh": "BGD", "Belarus": "BLR", "Belgium": "BEL",
+        "Bolivia": "BOL", "Bosnia and Herzegovina": "BIH", "Brazil": "BRA",
+        "Bulgaria": "BGR", "Canada": "CAN", "Chile": "CHL",
+        "China": "CHN", "Colombia": "COL", "Croatia": "HRV",
+        "Cyprus": "CYP", "Czech Republic": "CZE", "Czechia": "CZE",
+        "Denmark": "DNK", "Ecuador": "ECU", "Egypt": "EGY",
+        "Estonia": "EST", "Ethiopia": "ETH", "Finland": "FIN",
+        "France": "FRA", "Georgia": "GEO", "Germany": "DEU",
+        "Ghana": "GHA", "Greece": "GRC", "Hungary": "HUN",
+        "India": "IND", "Indonesia": "IDN", "Iran": "IRN",
+        "Iraq": "IRQ", "Ireland": "IRL", "Israel": "ISR",
+        "Italy": "ITA", "Japan": "JPN", "Jordan": "JOR",
+        "Kazakhstan": "KAZ", "Kenya": "KEN", "Kosovo": "XKX",
+        "Kuwait": "KWT", "Latvia": "LVA", "Lebanon": "LBN",
+        "Libya": "LBY", "Lithuania": "LTU", "Luxembourg": "LUX",
+        "Malaysia": "MYS", "Malta": "MLT", "Mexico": "MEX",
+        "Moldova": "MDA", "Montenegro": "MNE", "Morocco": "MAR",
+        "Netherlands": "NLD", "New Zealand": "NZL", "Nigeria": "NGA",
+        "North Macedonia": "MKD", "Norway": "NOR", "Oman": "OMN",
+        "Pakistan": "PAK", "Panama": "PAN", "Peru": "PER",
+        "Philippines": "PHL", "Poland": "POL", "Portugal": "PRT",
+        "Qatar": "QAT", "Romania": "ROU", "Russia": "RUS",
+        "Saudi Arabia": "SAU", "Serbia": "SRB", "Singapore": "SGP",
+        "Slovakia": "SVK", "Slovenia": "SVN", "South Africa": "ZAF",
+        "South Korea": "KOR", "Spain": "ESP", "Sweden": "SWE",
+        "Switzerland": "CHE", "Syria": "SYR", "Taiwan": "TWN",
+        "Tanzania": "TZA", "Thailand": "THA", "Tunisia": "TUN",
+        "Turkey": "TUR", "Türkiye": "TUR", "Uganda": "UGA",
+        "Ukraine": "UKR", "United Arab Emirates": "ARE",
+        "United Kingdom": "GBR", "UK": "GBR",
+        "USA": "USA", "United States": "USA", "United States of America": "USA",
+        "Uzbekistan": "UZB", "Venezuela": "VEN", "Vietnam": "VNM",
+        "Yemen": "YEM", "Zimbabwe": "ZWE",
+    }
+    _ISO3_TO_NAME = {v: k for k, v in _ISO3.items()}
+
+    # ── Collect per-entry data ──
+    countries_entries: dict = {}   # country_name → [entry, ...]
+    entry_keywords: list   = []    # [(entry, Counter), ...]
+
     for entry in entries_with_report:
         r = entry["report"]
-        country = (entry.get("country") or r.get("country") or "Unknown").strip()
+        country = (entry.get("country") or r.get("country") or "").strip()
         if country:
-            countries[country] += 1
-        verdicts[entry.get("verdict", "—")] += 1
-
-        for risk in r.get("risks", []):
-            if isinstance(risk, dict):
-                cat = risk.get("category", "")
-                lvl = risk.get("level", "")
-                if cat:
-                    risk_categories[cat] += 1
-                if lvl:
-                    risk_levels[lvl] += 1
-
-        # Flatten all requirement text
+            countries_entries.setdefault(country, []).append(entry)
         full_text = json.dumps(r.get("requirements", {}), ensure_ascii=False).lower()
         full_text += json.dumps(r.get("executive_summary", []), ensure_ascii=False).lower()
+        kw: Counter = Counter()
         for theme in _THEMES:
             if theme.lower() in full_text:
-                req_keywords[theme] += 1
+                kw[theme] += 1
+        entry_keywords.append((entry, kw))
 
-    if not (risk_categories or req_keywords):
+    req_keywords_all: Counter = Counter()
+    for _, kw in entry_keywords:
+        req_keywords_all.update(kw)
+
+    if not (countries_entries or req_keywords_all):
         return
+
+    # ── Build choropleth data ──
+    map_rows = []
+    for country, entries in countries_entries.items():
+        iso3 = _ISO3.get(country, "")
+        if iso3:
+            map_rows.append({"country": country, "iso3": iso3, "count": len(entries)})
 
     # ── Render ──
     st.markdown("""
@@ -1320,19 +1359,107 @@ def _portfolio_insights(lib: list):
       <div class="insights-title">📊 Portfolio Risk Insights</div>
     """, unsafe_allow_html=True)
 
-    cols = st.columns([1, 1, 2])
+    selected_names: list = []
+    cols = st.columns([3, 2])
 
     with cols[0]:
-        st.markdown("**Top risk categories**")
-        for cat, cnt in risk_categories.most_common(5):
-            st.markdown(f"- {cat} &nbsp;<span style='color:#7dd3fc;font-size:0.78rem;'>×{cnt}</span>", unsafe_allow_html=True)
+        st.markdown("**Tenders by country** — click to filter tags")
+
+        if map_rows:
+            df_map = pd.DataFrame(map_rows)
+
+            fig = px.choropleth(
+                df_map,
+                locations="iso3",
+                color="count",
+                hover_name="country",
+                hover_data={"iso3": False, "count": True},
+                color_continuous_scale=[
+                    [0.0, "rgba(0,120,200,0.35)"],
+                    [1.0, "#00AEEF"],
+                ],
+                labels={"count": "Tenders"},
+                projection="natural earth",
+            )
+            fig.update_layout(
+                geo=dict(
+                    bgcolor="rgba(0,0,0,0)",
+                    lakecolor="rgba(0,30,60,0.8)",
+                    landcolor="rgba(255,255,255,0.06)",
+                    showframe=False,
+                    showcoastlines=True,
+                    coastlinecolor="rgba(255,255,255,0.18)",
+                    showland=True,
+                    showcountries=True,
+                    countrycolor="rgba(255,255,255,0.12)",
+                    showocean=True,
+                    oceancolor="rgba(0,20,50,0.7)",
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0, r=0, t=0, b=0),
+                coloraxis_showscale=False,
+                height=250,
+                dragmode="select",
+            )
+            fig.update_traces(
+                marker_line_color="rgba(255,255,255,0.25)",
+                marker_line_width=0.5,
+                selector=dict(type="choropleth"),
+            )
+
+            event = st.plotly_chart(
+                fig,
+                use_container_width=True,
+                on_select="rerun",
+                key="portfolio_map",
+                config={"displayModeBar": False},
+            )
+
+            sel_points = (
+                event.selection.get("points", [])
+                if event and hasattr(event, "selection") and event.selection
+                else []
+            )
+            selected_iso3 = [p.get("location", "") for p in sel_points if p.get("location")]
+            selected_names = [
+                _ISO3_TO_NAME.get(iso, iso) for iso in selected_iso3
+                if _ISO3_TO_NAME.get(iso) in countries_entries
+            ]
+
+            if selected_names:
+                st.markdown(
+                    f'<p style="font-size:0.72rem;color:rgba(255,255,255,0.75);margin-top:0.3rem;">'
+                    f'Filtro attivo: {", ".join(selected_names)}'
+                    f' &nbsp;—&nbsp; <em>clicca fuori dalla selezione per resettare</em></p>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<p style="font-size:0.72rem;color:rgba(255,255,255,0.45);margin-top:0.3rem;">'
+                    'Nessun paese selezionato — visualizzati tutti i tender</p>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            # Fallback: no ISO3 match — plain list
+            for country, entries in sorted(countries_entries.items(), key=lambda x: -len(x[1])):
+                cnt = len(entries)
+                st.markdown(
+                    f"- {country} &nbsp;<span style='color:#7dd3fc;font-size:0.78rem;'>×{cnt}</span>",
+                    unsafe_allow_html=True,
+                )
 
     with cols[1]:
-        st.markdown("**Countries**")
-        for co, cnt in countries.most_common(6):
-            st.markdown(f"- {co} &nbsp;<span style='color:#7dd3fc;font-size:0.78rem;'>×{cnt}</span>", unsafe_allow_html=True)
+        # Filter entries by selected countries; default = all
+        if selected_names:
+            filtered_ids = {id(e) for name in selected_names for e in countries_entries.get(name, [])}
+            req_keywords: Counter = Counter()
+            for entry, kw in entry_keywords:
+                if id(entry) in filtered_ids:
+                    req_keywords.update(kw)
+        else:
+            req_keywords = req_keywords_all
 
-    with cols[2]:
         if req_keywords:
             st.markdown("**Recurring requirements across tenders**")
             tags_html = ""
@@ -1343,9 +1470,15 @@ def _portfolio_insights(lib: list):
             if any(cnt >= 2 for _, cnt in req_keywords.items()):
                 st.markdown(
                     '<p style="font-size:0.72rem;color:rgba(255,255,255,0.55);margin-top:0.6rem;">'
-                    'Highlighted tags appear in 2 or more tenders.</p>',
+                    'I tag evidenziati compaiono in 2 o più tender.</p>',
                     unsafe_allow_html=True,
                 )
+        else:
+            st.markdown(
+                '<p style="font-size:0.72rem;color:rgba(255,255,255,0.45);">'
+                'Nessun requisito ricorrente trovato per la selezione.</p>',
+                unsafe_allow_html=True,
+            )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
