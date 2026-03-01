@@ -232,7 +232,39 @@ Use exactly this structure:
       "when": "string",
       "evidence": "string"
     }}
-  ]
+  ],
+  "tender_overview": {{
+    "service_installation_support": {{
+      "summary": "2-4 sentence narrative covering the overall installation and service picture: who does what, key timeline, SLA level required, training obligations.",
+      "key_points": [
+        "Exhaustive bullets. Cover: site survey obligations and timing; installation responsibility (Inpeco, subcontractor, hospital); dismantling/removal of existing equipment; go-live support duration; acceptance testing procedure (FAT/SAT/IQ/OQ/PQ); SLA uptime % required; response time for faults (critical vs standard); spare parts obligations; maintenance contract type (full-risk, time & material, preventive); warranty duration and start trigger; training: who is trained, how many sessions, on-site vs remote; documentation to deliver (manuals, as-built drawings, validation dossiers); post-go-live hypercare period if stated."
+      ]
+    }},
+    "it_software": {{
+      "summary": "2-4 sentence narrative on the IT integration complexity: LIS/middleware involved, protocol requirements, cybersecurity obligations, any server supply.",
+      "key_points": [
+        "Exhaustive bullets. Cover: LIS name and version (if stated); HIS name (if stated); middleware platform name (if stated); communication protocols required (HL7 version, ASTM, FHIR, proprietary); message types required (order, result, status, ADT); bidirectional vs unidirectional interface; cybersecurity requirements (ISO 27001, IEC 62443, NIS2, penetration testing, DPIA); GDPR/data-residency obligations; remote access requirements (VPN, jump server, whitelisting); server/hardware to supply (specs if stated); network requirements (dedicated VLAN, bandwidth, latency); software validation requirements (IQ/OQ/PQ for software modules); software certification (CE IVD, FDA 510k, MDR if applicable); update/patch management obligations; disaster recovery / backup requirements."
+      ]
+    }},
+    "commercial_legal_finance": {{
+      "summary": "2-4 sentence narrative on the commercial and contractual profile: contract value, payment structure, main financial risks (penalties, bonds), applicable law.",
+      "key_points": [
+        "Exhaustive bullets. Cover: estimated contract value (total and per lot if applicable); payment terms (advance, milestone-based, on delivery, on acceptance); penalty/liquidated damages clauses (trigger event, amount per day/week, cap); performance bond or bank guarantee (%, duration, issuer requirements); insurance requirements (PI, public liability, amounts); warranty duration and scope; SLA financial penalties (if uptime SLA is missed); contract duration (if service/rental model); renewal/extension options; exclusivity clauses; applicable law and jurisdiction; dispute resolution mechanism (arbitration, court, ADR); price revision/indexation clauses; import/export restrictions or custom duties if cross-border; subcontracting restrictions."
+      ]
+    }},
+    "layout_building_utilities": {{
+      "summary": "2-4 sentence narrative on the physical installation environment: available space, building constraints, utilities available, civil works scope.",
+      "key_points": [
+        "Exhaustive bullets. Cover: total available floor area (m²) and dimensions of the lab/room; ceiling height; floor load capacity (kg/m²); door widths and corridor widths for equipment access; number of floors or buildings involved; elevator availability and dimensions; electrical supply available (kVA, phases, voltage, UPS); compressed air availability (bar, flow rate, dedicated line or shared); HVAC / air conditioning in the lab; drainage requirements; civil works scope (who pays, who executes: false floors, cable trays, partitions); pneumatic tube system (existing, to install, brand); fire safety and regulatory constraints for the lab space; any asbestos or structural survey requirements."
+      ]
+    }},
+    "solution_clinical_workflow": {{
+      "summary": "2-4 sentence narrative on the clinical and workflow requirements: what the automation must achieve clinically, throughput, tube types, analyzers to connect or supply.",
+      "key_points": [
+        "Exhaustive bullets. Cover: automation solution scope (pre-analytical only, full-track, post-analytical); required throughput (tubes/hour, peak load); tube types handled (primary, secondary, aliquots, caps on/off); sample types (serum, plasma, urine, CSF, blood, other); clinical specialties to serve (clinical chemistry, immunoassay, hematology, coagulation, urinalysis, microbiology, molecular, blood gas, toxicology, genetics); STAT workflow requirements (dedicated STAT lane, priority routing); centrifugation requirements (on-track centrifuge, number, RPM, temperature); decapping/recapping requirements; aliquoting requirements (number of daughters, volume); refrigerated storage (number of positions, temperature); sorting and routing logic complexity; analyzer list: brand + model + specialty for each (specify if to connect or to supply); consolidation requirement (replacing existing instruments with new ones); interfacing to legacy analyzers (specify if connectivity is known/certified); specific clinical protocols required (e.g. reflex testing, delta-check, ASAP routing)."
+      ]
+    }}
+  }}
 }}
 
 FIELD EXTRACTION RULES — APPLY TO EVERY ANALYSIS:
@@ -306,6 +338,42 @@ open_questions:
 deliverables:
   - Include ALL documents, certifications, plans, and reports requested.
   - Note the format required (electronic, paper, number of copies) if stated.
+
+tender_overview — 5 DOMAIN SECTIONS (all mandatory even if some info is missing):
+  Replace the single-string placeholder in each key_points array with REAL exhaustive bullets.
+  Each section must be self-contained: a reader who only looks at one section must understand
+  everything relevant to that domain without reading the rest of the report.
+
+  service_installation_support:
+    - Cover: site survey, installation scope (who does what), go-live support, acceptance testing
+      (FAT/SAT/IQ/OQ/PQ), SLA uptime %, fault response times, spare parts, maintenance model,
+      warranty duration/trigger, training (who/how many/on-site or remote), hypercare period.
+    - If info is not in the tender, say explicitly: "Not specified in the tender."
+
+  it_software:
+    - Cover: LIS/HIS/middleware names and versions, protocols (HL7/ASTM/FHIR), interface direction,
+      cybersecurity standards, GDPR, remote access, server supply obligations, software validation,
+      certifications (CE IVD/MDR/FDA), backup/DR requirements.
+    - Name every integration explicitly mentioned. If none, say so.
+
+  commercial_legal_finance:
+    - Cover: contract value, payment terms, penalties/LD (trigger + amount + cap), bonds/guarantees,
+      insurance, warranty scope, SLA financial consequences, contract duration, applicable law,
+      dispute resolution, exclusivity, subcontracting limits.
+    - Extract exact amounts and percentages where stated.
+
+  layout_building_utilities:
+    - Cover: m², room dimensions, ceiling height, floor load, door/corridor widths, floors involved,
+      electrical supply (kVA/phases/UPS), compressed air, HVAC, drainage, civil works scope,
+      pneumatic tube system, structural/asbestos surveys.
+    - If info is not in the tender, say explicitly: "Not specified in the tender."
+
+  solution_clinical_workflow:
+    - Cover: automation scope (pre/full/post-analytical), throughput (tubes/hour), tube types,
+      sample types, clinical specialties, STAT workflow, centrifugation, decapping, aliquoting,
+      refrigerated storage, analyzer list (brand + model + specialty + connect/supply), legacy
+      interfacing, consolidation, specific clinical protocols (reflex, delta-check, ASAP).
+    - List EVERY analyzer mentioned with its role (to connect vs to supply).
 """
 
 

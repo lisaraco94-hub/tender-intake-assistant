@@ -2044,6 +2044,42 @@ def _render_report(report: dict):
     for line in report.get("executive_summary", []):
         st.markdown(f"- {line}")
 
+    # ── Tender Overview (5 domain sections) ───────────────────────
+    overview = report.get("tender_overview", {})
+    if overview:
+        st.markdown('<div class="section-heading">Tender Overview</div>', unsafe_allow_html=True)
+        _OV_DOMAINS = [
+            ("service_installation_support", "🔧 Service & Installation",
+             "Installation scope, SLA, warranty, training, acceptance"),
+            ("it_software", "💻 IT & Software",
+             "LIS/HIS, middleware, protocols, cybersecurity, remote access"),
+            ("commercial_legal_finance", "📑 Commercial / Legal / Finance",
+             "Contract value, payment, penalties, bonds, applicable law"),
+            ("layout_building_utilities", "🏗️ Layout & Building",
+             "Space, floor load, utilities, civil works, compressed air"),
+            ("solution_clinical_workflow", "🔬 Solution / Clinical / Workflow",
+             "Automation scope, analyzers, throughput, specialties, STAT"),
+        ]
+        tabs = st.tabs([label for _, label, _ in _OV_DOMAINS])
+        for tab, (key, label, subtitle) in zip(tabs, _OV_DOMAINS):
+            with tab:
+                domain = overview.get(key, {})
+                if not domain:
+                    st.markdown('<p class="info-box">Not extracted for this section.</p>',
+                                unsafe_allow_html=True)
+                    continue
+                summary = domain.get("summary", "")
+                if summary:
+                    st.markdown(
+                        f'<div style="background:rgba(0,174,239,0.08);border-left:3px solid #00AEEF;'
+                        f'padding:0.7rem 1rem;border-radius:4px;margin-bottom:0.8rem;'
+                        f'font-size:0.92rem;color:rgba(255,255,255,0.9);">{summary}</div>',
+                        unsafe_allow_html=True,
+                    )
+                points = domain.get("key_points", [])
+                for pt in points:
+                    st.markdown(f"- {pt}")
+
     # ── Showstoppers ───────────────────────────────────────────────
     showstoppers = report.get("showstoppers", [])
     if showstoppers:
