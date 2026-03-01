@@ -974,12 +974,12 @@ a.feat-link:hover .feat-card {{
 }}
 [data-testid="stPlotlyChart"] {{
     flex: none !important;
-    height: 350px !important;
-    min-height: 350px !important;
+    height: 1600px !important;
+    min-height: 1600px !important;
 }}
 [data-testid="stPlotlyChart"] iframe {{
-    height: 350px !important;
-    min-height: 350px !important;
+    height: 1600px !important;
+    min-height: 1600px !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -1534,10 +1534,7 @@ def _portfolio_insights(lib: list):
       <div class="insights-title">📊 Portfolio Risk Insights</div>
     """, unsafe_allow_html=True)
 
-    if "map_init_done" not in st.session_state:
-        st.session_state["map_selected_iso3"] = set()
-        st.session_state["map_init_done"] = True
-    elif "map_selected_iso3" not in st.session_state:
+    if "map_selected_iso3" not in st.session_state:
         st.session_state["map_selected_iso3"] = set()
 
     selected_names: list = []
@@ -1592,7 +1589,7 @@ def _portfolio_insights(lib: list):
                     showocean=True,
                     oceancolor="rgba(0,20,50,0.7)",
                     projection=dict(type="natural earth"),
-                    lataxis=dict(range=[-55, 75]),
+                    lataxis=dict(range=[-60, 85]),
                     lonaxis=dict(range=[-180, 180]),
                     domain=dict(x=[0, 1], y=[0, 1]),
                 ),
@@ -1600,7 +1597,7 @@ def _portfolio_insights(lib: list):
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0, r=0, t=0, b=0),
                 coloraxis_showscale=False,
-                height=350,
+                height=1600,
                 autosize=True,
                 uirevision="constant",
                 dragmode=False,
@@ -1625,19 +1622,13 @@ def _portfolio_insights(lib: list):
                 else []
             )
             clicked_iso3 = {p.get("location", "") for p in sel_points if p.get("location")}
-            prev = set(st.session_state["map_selected_iso3"])
-            if not sel_points:
-                # Ocean / background click → clear all
+            # Toggle: clicking the same selection again clears it
+            if clicked_iso3 and clicked_iso3 == st.session_state["map_selected_iso3"]:
                 st.session_state["map_selected_iso3"] = set()
             elif clicked_iso3:
-                # Toggle each clicked country in/out of selection
-                new_sel = set(prev)
-                for iso in clicked_iso3:
-                    if iso in new_sel:
-                        new_sel.discard(iso)
-                    else:
-                        new_sel.add(iso)
-                st.session_state["map_selected_iso3"] = new_sel
+                st.session_state["map_selected_iso3"] = clicked_iso3
+            elif not sel_points:
+                st.session_state["map_selected_iso3"] = set()
 
             selected_names = [
                 _ISO3_TO_NAME.get(iso, iso)
