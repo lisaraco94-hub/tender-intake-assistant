@@ -1564,7 +1564,7 @@ def _portfolio_insights(lib: list):
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0, r=0, t=0, b=0),
                 coloraxis_showscale=False,
-                height=420,
+                height=1050,
                 dragmode=False,
                 clickmode="event+select",
             )
@@ -1688,21 +1688,6 @@ def view_library():
         rpt = entry.get("report")
         if rpt:
             _render_report(rpt)
-            # Word download button (mirrors the one in view_analyze)
-            st.divider()
-            try:
-                docx_bytes = build_docx(rpt, PRIMARY, ORANGE)
-                safe = display_title[:40].replace(" ", "_")
-                st.download_button(
-                    "⬇️ Download Word Report",
-                    data=docx_bytes,
-                    file_name=f"Tender_Intake_{safe}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True,
-                    type="primary",
-                )
-            except Exception as e:
-                st.warning(f"Could not generate Word report: {e}")
         else:
             st.info("Full report not available for this entry — it was analysed before report storage was added. Re-run the analysis to enable drill-down.")
         return
@@ -2020,6 +2005,22 @@ def view_knowledge():
 
 
 # ─── REPORT RENDERER ──────────────────────────────────────────────
+_EMPTY_PHRASES = (
+    "not specified", "not mentioned", "not provided", "not found",
+    "not stated", "not indicated", "not available", "not applicable",
+    "not included", "not defined", "not described", "not detailed",
+    "not given", "not disclosed", "not present", "not reported",
+    "not identified", "not extracted",
+)
+
+def _is_placeholder(val) -> bool:
+    """Return True if val is a LLM 'nothing found' filler."""
+    if not val or not isinstance(val, str):
+        return False
+    v = val.strip().lower()
+    return any(ph in v for ph in _EMPTY_PHRASES) or v in ("n/a", "na", "none", "—", "-")
+
+
 def _render_report(report: dict):
     detail = st.session_state.get("detail", "Medium")
     meta   = report.get("_meta", {})
@@ -2048,18 +2049,23 @@ def _render_report(report: dict):
 
     # ── Key metrics ────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Tender type",  (report.get("tender_type") or "—").upper())
-    c2.metric("Deadline",      report.get("submission_deadline") or "—")
-    c3.metric("Est. value",    report.get("estimated_value_eur") or "—")
+    def _mv(v): return "—" if _is_placeholder(v) else (v or "—")
+    ttype = _mv(report.get("tender_type", ""))
+    c1.metric("Tender type",  ttype.upper() if ttype != "—" else "—")
+    c2.metric("Deadline",      _mv(report.get("submission_deadline", "")))
+    c3.metric("Est. value",    _mv(report.get("estimated_value_eur", "")))
     city_disp    = report.get("city", "")
     country_disp = report.get("country", "")
+    city_disp    = "" if _is_placeholder(city_disp) else city_disp
+    country_disp = "" if _is_placeholder(country_disp) else country_disp
     loc = f"{city_disp} ({country_disp})" if city_disp and country_disp else (city_disp or country_disp or "—")
     c4.metric("Location", loc[:28])
 
     # ── Executive Summary ──────────────────────────────────────────
     st.markdown('<div class="section-heading">Executive Summary</div>', unsafe_allow_html=True)
     for line in report.get("executive_summary", []):
-        st.markdown(f"- {line}")
+        if not _is_placeholder(line):
+            st.markdown(f"- {line}")
 
     # ── Tender Overview (5 domain sections) ───────────────────────
     overview = report.get("tender_overview", {})
@@ -2086,7 +2092,7 @@ def _render_report(report: dict):
                                 unsafe_allow_html=True)
                     continue
                 summary = domain.get("summary", "")
-                if summary:
+                if summary and not _is_placeholder(summary):
                     st.markdown(
                         f'<div style="background:rgba(0,174,239,0.08);border-left:3px solid #00AEEF;'
                         f'padding:0.7rem 1rem;border-radius:4px;margin-bottom:0.8rem;'
@@ -2095,7 +2101,8 @@ def _render_report(report: dict):
                     )
                 points = domain.get("key_points", [])
                 for pt in points:
-                    st.markdown(f"- {pt}")
+                    if not _is_placeholder(pt):
+                        st.markdown(f"- {pt}")
 
     # ── Showstoppers ───────────────────────────────────────────────
     showstoppers = report.get("showstoppers", [])
@@ -2123,11 +2130,16 @@ def _render_report(report: dict):
     if deadlines:
         for d in deadlines:
             if not isinstance(d, dict):
-                st.markdown(f"- {d}")
+                if not _is_placeholder(d):
+                    st.markdown(f"- {d}")
+                continue
+            when = d.get("when", "")
+            milestone = d.get("milestone", "")
+            if _is_placeholder(when) and _is_placeholder(milestone):
                 continue
             ev = d.get("evidence", "")
-            ev_part = f"  \n  *{ev}*" if ev else ""
-            st.markdown(f"- **{d.get('when','?')}** — {d.get('milestone','')}{ev_part}")
+            ev_part = f"  \n  *{ev}*" if ev and not _is_placeholder(ev) else ""
+            st.markdown(f"- **{when or '?'}** — {milestone}{ev_part}")
     else:
         st.markdown('<p class="info-box">No specific dates identified in the document.</p>', unsafe_allow_html=True)
 
@@ -2137,12 +2149,18 @@ def _render_report(report: dict):
     if reqs:
         for key, items in reqs.items():
             if items:
-                st.markdown(f"**{key.replace('_', ' ').title()}**")
+                filtered = []
                 for item in items:
                     if isinstance(item, dict):
-                        st.markdown(f"- {item.get('text', str(item))}")
-                    else:
-                        st.markdown(f"- {item}")
+                        txt = item.get("text", str(item))
+                        if not _is_placeholder(txt):
+                            filtered.append(f"- {txt}")
+                    elif not _is_placeholder(item):
+                        filtered.append(f"- {item}")
+                if filtered:
+                    st.markdown(f"**{key.replace('_', ' ').title()}**")
+                    for f_item in filtered:
+                        st.markdown(f_item)
     else:
         st.markdown('<p class="info-box">No requirements extracted.</p>', unsafe_allow_html=True)
 
@@ -2151,7 +2169,8 @@ def _render_report(report: dict):
     st.markdown('<div class="section-heading">Deliverables to Prepare</div>', unsafe_allow_html=True)
     if deliverables:
         for item in deliverables:
-            st.markdown(f"- {item}")
+            if not _is_placeholder(item):
+                st.markdown(f"- {item}")
     else:
         st.markdown('<p class="info-box">No deliverables listed.</p>', unsafe_allow_html=True)
 
@@ -2174,9 +2193,11 @@ def _render_report(report: dict):
     # ── Open Questions ─────────────────────────────────────────────
     open_qs = report.get("open_questions", [])
     if open_qs:
-        st.markdown('<div class="section-heading">Open Questions</div>', unsafe_allow_html=True)
-        for q in open_qs:
-            st.markdown(f"- {q}")
+        filtered_qs = [q for q in open_qs if not _is_placeholder(q)]
+        if filtered_qs:
+            st.markdown('<div class="section-heading">Open Questions</div>', unsafe_allow_html=True)
+            for q in filtered_qs:
+                st.markdown(f"- {q}")
 
     # ── Download + API usage ───────────────────────────────────────
     st.divider()
