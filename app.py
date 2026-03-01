@@ -972,6 +972,15 @@ a.feat-link:hover .feat-card {{
     background: rgba(255,255,255,0.18) !important;
     border-color: rgba(255,255,255,0.5) !important;
 }}
+[data-testid="stPlotlyChart"] {{
+    flex: none !important;
+    height: 300px !important;
+    min-height: 300px !important;
+}}
+[data-testid="stPlotlyChart"] iframe {{
+    height: 300px !important;
+    min-height: 300px !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
