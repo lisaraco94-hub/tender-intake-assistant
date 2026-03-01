@@ -974,12 +974,12 @@ a.feat-link:hover .feat-card {{
 }}
 [data-testid="stPlotlyChart"] {{
     flex: none !important;
-    height: 1600px !important;
-    min-height: 1600px !important;
+    height: 600px !important;
+    min-height: 600px !important;
 }}
 [data-testid="stPlotlyChart"] iframe {{
-    height: 1600px !important;
-    min-height: 1600px !important;
+    height: 600px !important;
+    min-height: 600px !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -1597,7 +1597,7 @@ def _portfolio_insights(lib: list):
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0, r=0, t=0, b=0),
                 coloraxis_showscale=False,
-                height=1600,
+                height=600,
                 autosize=True,
                 uirevision="constant",
                 dragmode=False,
@@ -1611,7 +1611,7 @@ def _portfolio_insights(lib: list):
 
             event = st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width='stretch',
                 on_select="rerun",
                 key="portfolio_map",
                 config={"displayModeBar": False},
@@ -1916,7 +1916,7 @@ def view_knowledge():
                     if st.button(
                         f"{icon} {lvl}",
                         key=f"kb_lvl_{lvl}",
-                        use_container_width=True,
+                        width='stretch',
                         type="primary" if selected else "secondary",
                     ):
                         st.session_state.kb_risk_level = lvl
@@ -2229,7 +2229,7 @@ def _render_report(report: dict):
                 "score", ascending=False,
                 key=lambda s: pd.to_numeric(s, errors="coerce").fillna(0)
             ) if "score" in df.columns else df[ordered]
-            st.dataframe(df_sorted, use_container_width=True, hide_index=True)
+            st.dataframe(df_sorted, width='stretch', hide_index=True)
     else:
         st.markdown('<p class="info-box">No risks identified.</p>', unsafe_allow_html=True)
 
@@ -2254,7 +2254,7 @@ def _render_report(report: dict):
                 data=docx_bytes,
                 file_name=f"Tender_Intake_{safe}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
+                width='stretch',
                 type="primary",
             )
         except Exception as e:
