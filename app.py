@@ -1271,7 +1271,7 @@ def _portfolio_insights(lib: list):
     import re as _re
 
     # ── Named-entity patterns per category: (regex, canonical_label) ──
-    # Matched against the specific structured report fields, not free text.
+    # Each list is matched against the specific report field most likely to contain it.
     _CERTS = [
         (r"ISO[\s\-]?13485", "ISO 13485"),
         (r"ISO[\s\-]?9001", "ISO 9001"),
@@ -1288,12 +1288,35 @@ def _portfolio_insights(lib: list):
         (r"\bIQ[/\\]OQ[/\\]PQ\b|\bIQ[/\\]OQ\b|\bOQ[/\\]PQ\b", "IQ/OQ/PQ"),
         (r"\bCAP\b", "CAP"),
     ]
+    # Analyzer instruments: specific model names take priority over brand labels.
+    # Because we use a set(), both a brand tag and a model tag can coexist for the same tender.
     _ANALYZERS = [
+        # Roche / Cobas — models
+        (r"\bCobas\s*8100\b", "Cobas 8100"),
+        (r"\bCobas\s*Pro\b", "Cobas Pro"),
+        (r"\bCobas\s*6800\b", "Cobas 6800"),
+        (r"\bCobas\s*8800\b", "Cobas 8800"),
+        (r"\bCobas\s*[ec]\s*\d{3,4}\b", "Cobas e/c-series"),
+        (r"\bCobas\s*p\s*\d+\b|\bCobas\s*infinity\b", "Cobas p-series"),
         (r"\bRoche\b|\bCobas\b", "Roche / Cobas"),
-        (r"\bAbbott\b|\bArchitect\b|\bAlinity\b", "Abbott"),
-        (r"\bSiemens\b|\bAtellica\b|\bAdvia\b|\bDimension\b", "Siemens"),
-        (r"\bBeckman\s*Coulter\b|\bDxC\b|\bUniCel\b", "Beckman Coulter"),
+        # Abbott — models
+        (r"\bAlinity\s*[cis]\b|\bAlinity\b", "Alinity"),
+        (r"\bArchitect\s*[ci]\s*\d+\b|\bArchitect\b", "Architect"),
+        (r"\bAbbott\b", "Abbott"),
+        # Siemens — models
+        (r"\bAtellica\s*(?:Solution|CI|IM|CH)\b|\bAtellica\b", "Atellica"),
+        (r"\bAdvia\s*\d+\b|\bAdvia\b", "Advia"),
+        (r"\bBN\s*Pro\s*Spec\b|\bBNPro\b", "BN ProSpec"),
+        (r"\bSiemens\b|\bDimension\b", "Siemens"),
+        # Beckman Coulter — models
+        (r"\bDxC\s*\d+\b", "DxC"),
+        (r"\bAccess\s*2\b|\bAccess\s*\w+\b", "Access"),
+        (r"\bBeckman\s*Coulter\b|\bUniCel\b", "Beckman Coulter"),
+        # Sysmex — models
+        (r"\bXN[\s\-]?\d{3,4}\b", "Sysmex XN"),
+        (r"\bXE[\s\-]?\d+\b|\bXS[\s\-]?\d+\b", "Sysmex XE/XS"),
         (r"\bSysmex\b", "Sysmex"),
+        # Others
         (r"\bMindray\b", "Mindray"),
         (r"\bHoriba\b", "Horiba"),
         (r"\bbio\s*M[eé]rieux\b|\bVITEK\b", "bioMérieux"),
@@ -1323,6 +1346,44 @@ def _portfolio_insights(lib: list):
         (r"\bASTM\b", "ASTM"),
         (r"\bFHIR\b", "FHIR"),
         (r"\bDICOM\b", "DICOM"),
+    ]
+    # Lab specialties — extracted from analyzer_connectivity
+    _SPECIALTIES = [
+        (r"\bchimica\s*clinica\b|\bclinical\s*chemi(?:stry|e)\b|\bKlinische\s*Chemie\b", "Chimica clinica"),
+        (r"\bimmuno(?:assay|metria|metric|chimica)\b", "Immunoassay"),
+        (r"\bematologia\b|\bh[ae]matology\b", "Ematologia"),
+        (r"\bcoagulazione\b|\bcoagulation\b|\bemostasi\b|\bh[ae]mostasis\b", "Coagulazione"),
+        (r"\burin(?:analisi|alisi|analysis)\b|\besame\s*urine\b", "Urinanalisi"),
+        (r"\bmicrobiologia\b|\bmicrobiology\b", "Microbiologia"),
+        (r"\bbiologia\s*molecolare\b|\bmolecular\s*(?:biology|diagnostics)\b|\breal[\s\-]?time\s*PCR\b|\bNGS\b|\b\bPCR\b", "Biologia molecolare"),
+        (r"\bemogasanalisi\b|\bblood\s*gas\b|\bEGA\b|\bgasometria\b", "Emogasanalisi"),
+        (r"\btossicologia\b|\btoxicology\b|\bdrug\s*testing\b|\bTDM\b", "Tossicologia"),
+        (r"\bsierologia\b|\bserology\b", "Sierologia"),
+        (r"\belettroforesi\b|\belectrophoresis\b|\bSPEP\b|\bIPEP\b", "Elettroforesi"),
+        (r"\bcitofluorimetria\b|\bflow\s*cytometry\b", "Citofluorimetria"),
+        (r"\bpunto\s*di\s*cura\b|\bpoint[\s\-]of[\s\-]care\b|\bPOCT\b", "POCT"),
+    ]
+    # Infrastructure & operational requirements — extracted from scope + space + commercial fields
+    _INFRA = [
+        # BIM / digital formats
+        (r"\bBIM\b|\bBuilding\s*Information\s*Model(?:l?ing)?\b", "BIM"),
+        (r"\bIFC\b|\bIndustry\s*Foundation\s*Class(?:es)?\b", "IFC format"),
+        (r"\bRevit\b|\bAutoCAD\b|\bCAD\b", "CAD / Revit"),
+        (r"\bdigital\s*twin\b|\bgemello\s*digitale\b", "Digital twin"),
+        # Civil / building works
+        (r"\blavori\s*edili\b|\bopere\s*civili\b|\bedilizia\b|\bcivil\s*works\b|\bBauarbeiten\b", "Lavori edili"),
+        (r"\bdemoliz(?:ione|ioni)\b|\bdismissione\b|\brimozione\s*(?:arredi|attrezzature)\b|\bsmantellamento\b", "Demolizione/smantellamento"),
+        (r"\bimpianti?\s*elettri(?:ci|co)\b|\belectrical\s*works\b|\bcablaggi\b", "Impianti elettrici"),
+        (r"\bimpianti?\s*(?:idraulici?|idrico|pneumatic[oi]|aria\s*compressa)\b", "Impianti idraulici/pneumatici"),
+        (r"\bpaviment(?:azione|o\s+sopraelevato)\b|\braised\s*floor\b|\bfalso\s*pavimento\b", "Pavimentazione"),
+        # On-site service / support model
+        (r"\bpresidio\s*(?:fisso|continuo|permanente|giornaliero|quotidiano|h24)\b|\bon[\s\-]?site\s*engineer\b|\btechnicien\s*(?:d[eé]di[eé]|sur\s*site)\b", "Presidio on-site"),
+        (r"\btecnico\s*dedicato\b|\bdedicated\s*(?:engineer|technician|service)\b|\bingegnere\s*dedicato\b", "Tecnico dedicato"),
+        (r"\b24[/\\]7\b|\bH24\b|\b24\s*ore\s*su\s*24\b|\bsette\s*giorni\s*su\s*sette\b", "Supporto 24/7"),
+        (r"\breperibilit[àa]\b|\bon[\s\-]?call\b|\bguardia\s*attiva\b", "Reperibilità h24"),
+        # Remote / digital services
+        (r"\bremote\s*monitoring\b|\bmonitoraggio\s*remoto\b|\bteleassistenza\b|\btelemanutenzione\b", "Monitoraggio remoto"),
+        (r"\bmagazzino\s*ricambi\b|\bspare\s*parts\s*on[\s\-]?site\b|\bstock\s*ricambi\b", "Ricambi in loco"),
     ]
 
     def _match_labels(patterns, text):
@@ -1375,7 +1436,7 @@ def _portfolio_insights(lib: list):
 
     # ── Collect per-entry data ──
     countries_entries: dict = {}
-    entry_tags: list = []   # [(entry, {"cert": set, "analyzer": set, "lis": set}), ...]
+    entry_tags: list = []
 
     for entry in entries_with_report:
         r = entry["report"]
@@ -1383,29 +1444,40 @@ def _portfolio_insights(lib: list):
         if country:
             countries_entries.setdefault(country, []).append(entry)
         reqs = r.get("requirements", {})
-        cert_text  = " ".join(reqs.get("qualification_and_compliance", []))
-        anlzr_text = " ".join(reqs.get("analyzer_connectivity", []))
-        lis_text   = " ".join(reqs.get("it_and_middleware", []))
+        cert_text    = " ".join(reqs.get("qualification_and_compliance", []))
+        anlzr_text   = " ".join(reqs.get("analyzer_connectivity", []))
+        lis_text     = " ".join(reqs.get("it_and_middleware", []))
+        # specialties live in analyzer_connectivity too (AI describes what's needed there)
+        spec_text    = anlzr_text
+        # infra/operational requirements span scope, space, and commercial fields
+        infra_text   = " ".join(
+            reqs.get("scope_and_responsibility", [])
+            + reqs.get("space_and_facility", [])
+            + reqs.get("commercial_conditions", [])
+        )
         tags = {
-            "cert":     _match_labels(_CERTS,     cert_text),
-            "analyzer": _match_labels(_ANALYZERS, anlzr_text),
-            "lis":      _match_labels(_LIS,        lis_text),
+            "cert":      _match_labels(_CERTS,       cert_text),
+            "analyzer":  _match_labels(_ANALYZERS,   anlzr_text),
+            "lis":       _match_labels(_LIS,          lis_text),
+            "specialty": _match_labels(_SPECIALTIES,  spec_text),
+            "infra":     _match_labels(_INFRA,        infra_text),
         }
         entry_tags.append((entry, tags))
 
     def _tally(pairs):
-        cert_c: Counter = Counter()
-        anlzr_c: Counter = Counter()
-        lis_c: Counter = Counter()
+        cert_c = Counter(); anlzr_c = Counter(); lis_c = Counter()
+        spec_c = Counter(); infra_c = Counter()
         for _, t in pairs:
-            for lbl in t["cert"]:     cert_c[lbl]  += 1
-            for lbl in t["analyzer"]: anlzr_c[lbl] += 1
-            for lbl in t["lis"]:      lis_c[lbl]   += 1
-        return cert_c, anlzr_c, lis_c
+            for lbl in t["cert"]:      cert_c[lbl]  += 1
+            for lbl in t["analyzer"]:  anlzr_c[lbl] += 1
+            for lbl in t["lis"]:       lis_c[lbl]   += 1
+            for lbl in t["specialty"]: spec_c[lbl]  += 1
+            for lbl in t["infra"]:     infra_c[lbl] += 1
+        return cert_c, anlzr_c, lis_c, spec_c, infra_c
 
-    cert_all, anlzr_all, lis_all = _tally(entry_tags)
+    cert_all, anlzr_all, lis_all, spec_all, infra_all = _tally(entry_tags)
 
-    if not (countries_entries or any([cert_all, anlzr_all, lis_all])):
+    if not (countries_entries or any([cert_all, anlzr_all, lis_all, spec_all, infra_all])):
         return
 
     # ── Build choropleth data ──
@@ -1515,16 +1587,18 @@ def _portfolio_insights(lib: list):
         # Filter by country selection; default = all
         if selected_names:
             filtered_ids = {id(e) for name in selected_names for e in countries_entries.get(name, [])}
-            cert_c, anlzr_c, lis_c = _tally(
+            cert_c, anlzr_c, lis_c, spec_c, infra_c = _tally(
                 [(e, t) for e, t in entry_tags if id(e) in filtered_ids]
             )
         else:
-            cert_c, anlzr_c, lis_c = cert_all, anlzr_all, lis_all
+            cert_c, anlzr_c, lis_c, spec_c, infra_c = cert_all, anlzr_all, lis_all, spec_all, infra_all
 
         sections = [
             ("📋 Certificazioni", cert_c),
-            ("🔬 Analizzatori richiesti", anlzr_c),
-            ("💻 LIS / Protocolli", lis_c),
+            ("🔬 Strumenti / Analizzatori", anlzr_c),
+            ("🧬 Specialità analitiche", spec_c),
+            ("💻 LIS / Protocolli IT", lis_c),
+            ("🏗️ Infrastruttura & Operatività", infra_c),
         ]
         any_found = any(c for _, c in sections)
 
