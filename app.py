@@ -1576,7 +1576,7 @@ def _portfolio_insights(lib: list):
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0, r=0, t=0, b=0),
                 coloraxis_showscale=False,
-                height=300,
+                height=500,
                 autosize=True,
                 uirevision="constant",
                 dragmode=False,
