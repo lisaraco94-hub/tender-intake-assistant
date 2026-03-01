@@ -1550,7 +1550,7 @@ def _portfolio_insights(lib: list):
                 return resp.json()
 
             def _style(feature):
-                iso3 = feature["properties"].get("ISO_A3", "")
+                iso3 = feature["properties"].get("ISO3166-1-Alpha-3", "")
                 if iso3 in _sel:
                     return {"fillColor": "#FF6B00", "color": "white",
                             "weight": 0.5, "fillOpacity": 0.85, "opacity": 0.2}
@@ -1561,7 +1561,7 @@ def _portfolio_insights(lib: list):
                         "weight": 0.5, "fillOpacity": 0.60, "opacity": 0.2}
 
             def _highlight(feature):
-                if feature["properties"].get("ISO_A3", "") in tender_iso3:
+                if feature["properties"].get("ISO3166-1-Alpha-3", "") in tender_iso3:
                     return {"fillOpacity": 1.0, "weight": 1.0, "opacity": 0.5}
                 return {}
 
@@ -1589,7 +1589,7 @@ def _portfolio_insights(lib: list):
                     style_function=_style,
                     highlight_function=_highlight,
                     tooltip=folium.GeoJsonTooltip(
-                        fields=["ISO_A3"],
+                        fields=["ISO3166-1-Alpha-3"],
                         labels=False,
                         sticky=False,
                     ),
