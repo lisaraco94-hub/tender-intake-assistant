@@ -1544,7 +1544,6 @@ def _portfolio_insights(lib: list):
                     [1.0, "#00AEEF"],
                 ],
                 labels={"count": "Tenders"},
-                projection="natural earth",
             )
             fig.update_layout(
                 geo=dict(
@@ -1559,6 +1558,7 @@ def _portfolio_insights(lib: list):
                     countrycolor="rgba(255,255,255,0.12)",
                     showocean=True,
                     oceancolor="rgba(0,20,50,0.7)",
+                    projection=dict(type="natural earth", scale=2.5),
                 ),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
