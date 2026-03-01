@@ -63,25 +63,39 @@ def load_risk_factors(path: str | None = None) -> Dict[str, Any]:
 # ─── Knowledge context loader (disk fallback) ─────────────────────
 
 def _load_knowledge_context_from_disk(
-    max_chars_per_file: int = 12_000,
-    max_total: int = 36_000,
+    max_chars_per_file: int = 20_000,
+    max_total: int = 80_000,
 ) -> str:
-    """Load past-bid documents from the knowledge folders and return as a single string."""
+    """Load past-bid documents from the knowledge folders and return as a single string.
+    Excel compliance matrices are parsed with the dedicated parser."""
     import glob as _glob
+    from .extractors import parse_bid_response_excel, extract_from_file
+
     chunks: list[str] = []
     total = 0
-    for folder in ("assets/knowledge/won", "assets/knowledge/lost"):
+    folder_labels = [
+        ("assets/knowledge/responses", "PAST BID RESPONSE"),
+        ("assets/knowledge/won",  "PAST BID RESPONSE (won)"),
+        ("assets/knowledge/lost", "PAST BID RESPONSE (lost)"),
+    ]
+    for folder, label in folder_labels:
         if not os.path.isdir(folder):
             continue
-        label = "WON" if folder.endswith("won") else "LOST"
         for fpath in sorted(_glob.glob(os.path.join(folder, "*"))):
             if total >= max_total:
                 break
+            fn = os.path.basename(fpath)
+            ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
             try:
                 with open(fpath, "rb") as fh:
                     raw = fh.read()
-                text = raw.decode("utf-8", errors="replace")[:max_chars_per_file]
-                chunks.append(f"--- [{label}] {os.path.basename(fpath)} ---\n{text}")
+                if ext in ("xlsx", "xls"):
+                    text = parse_bid_response_excel(raw, fn)
+                else:
+                    pages = extract_from_file(raw, fn)
+                    text = "\n".join(pages)
+                text = text[:max_chars_per_file]
+                chunks.append(f"=== {label}: {fn} ===\n{text}")
                 total += len(text)
             except Exception:
                 continue
@@ -97,19 +111,29 @@ def _build_system_prompt(risk_factors: Dict[str, Any], knowledge_context: str = 
     if knowledge_context.strip():
         knowledge_section = f"""
 
-PAST BID EXPERIENCE — INPECO'S OWN RESPONSES:
-The following excerpts are from Inpeco's actual written responses to past tenders (won and lost).
-Read them carefully and use them to:
-1. Understand Inpeco's REAL capabilities vs theoretical ones — what was actually committed vs hedged
-2. Spot soft/diplomatic language that reveals true limitations:
-   e.g. "subject to site survey", "to be evaluated case by case", "in principle compatible",
-   "we propose to assess during project kick-off", "subject to final confirmation"
-3. Flag if this new tender requires capabilities that Inpeco struggled with in past responses
-4. Reference these institutional patterns when rating risks and writing the rationale
+PAST BID COMPLIANCE DATA — INPECO'S HISTORICAL ANSWERS:
+The following data is extracted from Inpeco's compliance matrices in past tender responses
+(Excel files with requirement lists, Y/N/partially columns, mandatory/optional flags).
+
+HOW TO READ THIS DATA:
+- "MANDATORY — NOT COMPLIANT (N)": requirements Inpeco COULD NOT meet in a past bid.
+  These are CONFIRMED CAPABILITY GAPS. If the current tender contains similar requirements,
+  you MUST flag them as HIGH risk or SHOWSTOPPER and explicitly reference the past gap.
+- "MANDATORY — PARTIALLY COMPLIANT": requirements Inpeco only partially met.
+  These are KNOWN WEAKNESSES. Flag as MEDIUM-HIGH risk if similar requirements appear.
+- "OPTIONAL — NOT COMPLIANT / PARTIAL": lower-priority gaps, still worth noting.
+- "MANDATORY — COMPLIANT (Y)": confirmed capabilities; use to reassure where relevant.
+
+INSTRUCTIONS:
+1. Cross-reference EVERY requirement in the current tender against these past gaps.
+2. When you find a match or similarity, say so explicitly in the risk evidence and rationale:
+   e.g. "In past bid [filename], Inpeco answered N to a similar connectivity requirement."
+3. Treat recurring N/partial patterns as systemic limitations, not one-off cases.
+4. Do NOT use hedged language if the data clearly shows a gap — be direct.
 
 {knowledge_context}
 
-END OF PAST BID EXPERIENCE
+END OF PAST BID COMPLIANCE DATA
 """
 
     return f"""You are an expert pre-bid tender analyst for {company.get("name", "the company")}.
@@ -241,15 +265,71 @@ SCORING RULES:
   - Otherwise → GO
 - go_nogo score: 0-100 representing overall bid feasibility (100=fully feasible, 0=completely infeasible)
 - requirements and deliverables: BE EXHAUSTIVE — do not summarize or truncate. Every item explicitly mentioned in the tender must appear.
+
+REPORT VERBOSITY — MANDATORY MINIMUM STANDARDS:
+The report MUST be comprehensive and detailed. Apply these minimum standards to every field:
+
+executive_summary:
+  - Minimum 6 bullet points.
+  - Each point must be a complete sentence of at least 30 words.
+  - Cover: tender scope, contract value, type (bundle/unbundle), submission deadline,
+    top 2-3 risks or showstoppers, knowledge-base gaps found, go/no-go recommendation rationale.
+
+go_nogo.rationale:
+  - Minimum 120 words.
+  - Explain the score step by step: what drives it up, what drives it down.
+  - If knowledge base gaps were found, mention them explicitly.
+
+showstoppers (each entry):
+  - description: ≥ 2 sentences explaining WHY it is a showstopper, not just WHAT it is.
+  - evidence: exact quote from the document, including section reference.
+  - impact: ≥ 2 sentences on business/legal/operational consequences.
+
+risks (each entry):
+  - evidence: direct quote or detailed paraphrase with section reference.
+  - mitigation: concrete, actionable steps (not generic phrases like "contact the client").
+    Minimum 2 sentences. Mention specific tasks, verifications, or partners if applicable.
+  - If the knowledge base shows a similar gap in a past bid, say so explicitly in the evidence.
+
+requirements sections (scope_and_responsibility, space_and_facility, etc.):
+  - Do NOT group items. Each distinct sub-requirement gets its own bullet.
+  - Include the relevant document section or page in parentheses where possible.
+  - If a requirement is ambiguous, append "(CLARIFICATION NEEDED)" to that bullet.
+
+open_questions:
+  - List EVERY ambiguity or missing information that would affect the bid decision.
+  - Each question must be specific and actionable (e.g. not "check the schedule" but
+    "Confirm whether the 90-day installation deadline counts from contract signature or
+    from site readiness sign-off — this distinction changes the project plan significantly.").
+  - Minimum 5 open questions unless the tender is extremely complete.
+
+deliverables:
+  - Include ALL documents, certifications, plans, and reports requested.
+  - Note the format required (electronic, paper, number of copies) if stated.
 """
 
 
 def _build_user_prompt(document_text: str, detail: str = "Medium") -> str:
     detail_instructions = {
-        "Low": "Provide a concise analysis. Focus only on showstoppers and top 3 risks.",
-        "Medium": "Provide a balanced analysis. Cover all risk categories and key requirements.",
-        "High": "Provide an exhaustive analysis. Extract every constraint, requirement, and risk. "
-                "List all open questions that need clarification before bidding.",
+        "Low": (
+            "Provide a focused analysis covering showstoppers, the top 5 risks, "
+            "and a concise executive summary. Apply the verbosity standards from the system prompt "
+            "even at this level — keep it concise but never vague."
+        ),
+        "Medium": (
+            "Provide a thorough analysis. Cover ALL risk categories, ALL requirement sections, "
+            "and ALL open questions. Apply the full verbosity standards from the system prompt. "
+            "The report should be detailed enough that a bid manager can make a go/no-go decision "
+            "without reading the original tender document."
+        ),
+        "High": (
+            "Provide the most exhaustive analysis possible. Extract every constraint, requirement, "
+            "risk, deadline, and open question. Leave nothing implicit. "
+            "Apply all verbosity standards from the system prompt to their maximum extent. "
+            "If the knowledge base contains past gaps relevant to ANY requirement in this tender, "
+            "reference them explicitly. The report will be used as the primary briefing document "
+            "for the bid team — completeness is more important than brevity."
+        ),
     }
     instruction = detail_instructions.get(detail, detail_instructions["Medium"])
 

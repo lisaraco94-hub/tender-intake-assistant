@@ -11,7 +11,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from src.extractors import extract_from_file, SUPPORTED_EXTENSIONS
+from src.extractors import extract_from_file, parse_bid_response_excel, SUPPORTED_EXTENSIONS
 from src.pipeline import build_prebid_report, load_risk_factors
 from src.report_docx import build_docx
 
@@ -84,8 +84,14 @@ def _migrate_risk_register(rf: dict) -> tuple[dict, bool]:
     return rf, migrated
 
 
-def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 36_000) -> str:
-    """Load text from past bid response documents stored in the knowledge base."""
+def _load_knowledge_context(max_chars_per_file: int = 20_000, max_total: int = 80_000) -> str:
+    """Load past bid response documents from the knowledge base.
+
+    Excel files (.xlsx/.xls) are parsed with the dedicated compliance-matrix
+    parser so that Y/N/partially answers are correctly categorised and the AI
+    receives a structured summary rather than raw tab-separated cell dumps.
+    Other formats are read as plain text.
+    """
     parts = []
     total = 0
     for folder, label in [
@@ -104,8 +110,13 @@ def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 3
             try:
                 with open(fp, "rb") as f:
                     file_bytes = f.read()
-                pages = extract_from_file(file_bytes, fn)
-                text = "\n".join(pages)[:max_chars_per_file]
+                ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+                if ext in ("xlsx", "xls"):
+                    text = parse_bid_response_excel(file_bytes, fn)
+                else:
+                    pages = extract_from_file(file_bytes, fn)
+                    text = "\n".join(pages)
+                text = text[:max_chars_per_file]
                 parts.append(f"=== {label}: {fn} ===\n{text}")
                 total += len(text)
             except Exception:
@@ -1180,7 +1191,11 @@ def view_analyze():
             knowledge_ctx = _load_knowledge_context()
             n_kb = len([
                 fn
-                for folder in ("assets/knowledge/won", "assets/knowledge/lost")
+                for folder in (
+                    "assets/knowledge/responses",
+                    "assets/knowledge/won",
+                    "assets/knowledge/lost",
+                )
                 if os.path.exists(folder)
                 for fn in os.listdir(folder)
             ])
