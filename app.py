@@ -1564,8 +1564,9 @@ def _portfolio_insights(lib: list):
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0, r=0, t=0, b=0),
                 coloraxis_showscale=False,
-                height=250,
-                dragmode="select",
+                height=420,
+                dragmode=False,
+                clickmode="event+select",
             )
             fig.update_traces(
                 marker_line_color="rgba(255,255,255,0.25)",
