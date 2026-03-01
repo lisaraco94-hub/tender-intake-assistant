@@ -11,7 +11,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from src.extractors import extract_from_file, SUPPORTED_EXTENSIONS
+from src.extractors import extract_from_file, parse_bid_response_excel, SUPPORTED_EXTENSIONS
 from src.pipeline import build_prebid_report, load_risk_factors
 from src.report_docx import build_docx
 
@@ -84,8 +84,14 @@ def _migrate_risk_register(rf: dict) -> tuple[dict, bool]:
     return rf, migrated
 
 
-def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 36_000) -> str:
-    """Load text from past bid response documents stored in the knowledge base."""
+def _load_knowledge_context(max_chars_per_file: int = 20_000, max_total: int = 80_000) -> str:
+    """Load past bid response documents from the knowledge base.
+
+    Excel files (.xlsx/.xls) are parsed with the dedicated compliance-matrix
+    parser so that Y/N/partially answers are correctly categorised and the AI
+    receives a structured summary rather than raw tab-separated cell dumps.
+    Other formats are read as plain text.
+    """
     parts = []
     total = 0
     for folder, label in [
@@ -104,8 +110,13 @@ def _load_knowledge_context(max_chars_per_file: int = 12_000, max_total: int = 3
             try:
                 with open(fp, "rb") as f:
                     file_bytes = f.read()
-                pages = extract_from_file(file_bytes, fn)
-                text = "\n".join(pages)[:max_chars_per_file]
+                ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+                if ext in ("xlsx", "xls"):
+                    text = parse_bid_response_excel(file_bytes, fn)
+                else:
+                    pages = extract_from_file(file_bytes, fn)
+                    text = "\n".join(pages)
+                text = text[:max_chars_per_file]
                 parts.append(f"=== {label}: {fn} ===\n{text}")
                 total += len(text)
             except Exception:
@@ -1097,6 +1108,27 @@ def view_analyze():
             "High":   "~4–8 min · full analysis",
         }[detail])
 
+        st.markdown(
+            '<div style="margin-top:0.7rem;font-size:0.78rem;color:rgba(255,255,255,0.75);'
+            'font-weight:600;margin-bottom:0.15rem;">Consensus runs</div>',
+            unsafe_allow_html=True,
+        )
+        consensus_runs = st.radio(
+            "consensus_runs_sel",
+            options=[1, 2, 3],
+            format_func=lambda x: {1: "1× Fast", 2: "2× Balanced", 3: "3× Consensus"}[x],
+            index=st.session_state.get("consensus_runs", 1) - 1,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="consensus_runs_radio",
+        )
+        st.session_state.consensus_runs = consensus_runs
+        st.caption({
+            1: "Single pass",
+            2: "2 independent runs merged",
+            3: "3 independent runs merged — most stable",
+        }[consensus_runs])
+
     # Sidebar (still available for advanced users)
     with st.sidebar:
         st.markdown("### ⚙️ Settings")
@@ -1180,37 +1212,36 @@ def view_analyze():
             knowledge_ctx = _load_knowledge_context()
             n_kb = len([
                 fn
-                for folder in ("assets/knowledge/won", "assets/knowledge/lost")
+                for folder in (
+                    "assets/knowledge/responses",
+                    "assets/knowledge/won",
+                    "assets/knowledge/lost",
+                )
                 if os.path.exists(folder)
                 for fn in os.listdir(folder)
             ])
+            runs = st.session_state.get("consensus_runs", 1)
             spinner_msg = (
                 f"Analysing {len(uploaded_files)} file(s) with GPT-4o [{detail}]"
-                + (f" · {n_kb} past bid doc(s) loaded" if n_kb else "")
+                + (f" · {n_kb} KB doc(s) in KB" if n_kb else "")
+                + (f" · {runs}× consensus" if runs > 1 else "")
                 + "…"
             )
             with st.spinner(spinner_msg):
                 try:
                     _sig = inspect.signature(build_prebid_report)
+                    _kw: dict = dict(
+                        risk_factors=risk_factors,
+                        detail=detail,
+                    )
                     if "knowledge_context" in _sig.parameters:
-                        report = build_prebid_report(
-                            all_pages,
-                            risk_factors=risk_factors,
-                            detail=detail,
-                            knowledge_context=knowledge_ctx,
-                        )
-                    else:
-                        # Older pipeline.py without knowledge_context param —
-                        # prepend context as the first page so it's still analysed.
-                        pages_with_ctx = (
-                            [f"=== COMPANY KNOWLEDGE BASE ===\n{knowledge_ctx}"] + all_pages
-                            if knowledge_ctx else all_pages
-                        )
-                        report = build_prebid_report(
-                            pages_with_ctx,
-                            risk_factors=risk_factors,
-                            detail=detail,
-                        )
+                        _kw["knowledge_context"] = knowledge_ctx
+                    if "runs" in _sig.parameters:
+                        _kw["runs"] = runs
+                    if "knowledge_context" not in _sig.parameters and knowledge_ctx:
+                        # Legacy pipeline without knowledge_context param — prepend as page
+                        all_pages = [f"=== COMPANY KNOWLEDGE BASE ===\n{knowledge_ctx}"] + all_pages
+                    report = build_prebid_report(all_pages, **_kw)
                     st.session_state.report = report
                     st.session_state.run_done = True
 
@@ -2029,6 +2060,42 @@ def _render_report(report: dict):
     for line in report.get("executive_summary", []):
         st.markdown(f"- {line}")
 
+    # ── Tender Overview (5 domain sections) ───────────────────────
+    overview = report.get("tender_overview", {})
+    if overview:
+        st.markdown('<div class="section-heading">Tender Overview</div>', unsafe_allow_html=True)
+        _OV_DOMAINS = [
+            ("service_installation_support", "🔧 Service & Installation",
+             "Installation scope, SLA, warranty, training, acceptance"),
+            ("it_software", "💻 IT & Software",
+             "LIS/HIS, middleware, protocols, cybersecurity, remote access"),
+            ("commercial_legal_finance", "📑 Commercial / Legal / Finance",
+             "Contract value, payment, penalties, bonds, applicable law"),
+            ("layout_building_utilities", "🏗️ Layout & Building",
+             "Space, floor load, utilities, civil works, compressed air"),
+            ("solution_clinical_workflow", "🔬 Solution / Clinical / Workflow",
+             "Automation scope, analyzers, throughput, specialties, STAT"),
+        ]
+        tabs = st.tabs([label for _, label, _ in _OV_DOMAINS])
+        for tab, (key, label, subtitle) in zip(tabs, _OV_DOMAINS):
+            with tab:
+                domain = overview.get(key, {})
+                if not domain:
+                    st.markdown('<p class="info-box">Not extracted for this section.</p>',
+                                unsafe_allow_html=True)
+                    continue
+                summary = domain.get("summary", "")
+                if summary:
+                    st.markdown(
+                        f'<div style="background:rgba(0,174,239,0.08);border-left:3px solid #00AEEF;'
+                        f'padding:0.7rem 1rem;border-radius:4px;margin-bottom:0.8rem;'
+                        f'font-size:0.92rem;color:rgba(255,255,255,0.9);">{summary}</div>',
+                        unsafe_allow_html=True,
+                    )
+                points = domain.get("key_points", [])
+                for pt in points:
+                    st.markdown(f"- {pt}")
+
     # ── Showstoppers ───────────────────────────────────────────────
     showstoppers = report.get("showstoppers", [])
     if showstoppers:
@@ -2131,6 +2198,8 @@ def _render_report(report: dict):
         if meta:
             with st.expander("API usage"):
                 st.caption(f"Model: {meta.get('model','gpt-4o')}")
+                if meta.get("runs", 1) > 1:
+                    st.caption(f"Runs: {meta['runs']}× consensus merge")
                 st.caption(f"Tokens: {meta.get('total_tokens',0):,}")
                 st.caption(f"Cost: ${meta.get('estimated_cost_usd',0):.4f}")
                 st.caption(f"Sections: {meta.get('pages_analyzed',0)}")

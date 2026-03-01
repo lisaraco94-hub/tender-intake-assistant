@@ -106,8 +106,31 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
     for line in report.get("executive_summary", []):
         doc.add_paragraph(line, style="List Bullet")
 
-    # 2 Deadlines
-    _add_colored_heading(doc, "2. Key Deadlines & Milestones", 1, primary_hex)
+    # 2 Tender Overview
+    overview = report.get("tender_overview", {})
+    if overview:
+        _add_colored_heading(doc, "2. Tender Overview", 1, primary_hex)
+        _OV_DOMAINS = [
+            ("service_installation_support", "Service & Installation"),
+            ("it_software",                  "IT & Software"),
+            ("commercial_legal_finance",     "Commercial / Legal / Finance"),
+            ("layout_building_utilities",    "Layout & Building"),
+            ("solution_clinical_workflow",   "Solution / Clinical / Workflow"),
+        ]
+        for key, label in _OV_DOMAINS:
+            domain = overview.get(key, {})
+            if not domain:
+                continue
+            _add_colored_heading(doc, label, 2, accent_hex)
+            summary = domain.get("summary", "")
+            if summary:
+                p = doc.add_paragraph(summary)
+                p.runs[0].italic = True if p.runs else None
+            for pt in domain.get("key_points", []):
+                doc.add_paragraph(str(pt), style="List Bullet")
+
+    # 3 Deadlines
+    _add_colored_heading(doc, "3. Key Deadlines & Milestones", 1, primary_hex)
     deadlines = report.get("deadlines", [])
     if deadlines:
         table = doc.add_table(rows=1, cols=3)
@@ -127,8 +150,8 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
     else:
         doc.add_paragraph("No explicit deadlines detected.", style="List Bullet")
 
-    # 3 Requirements
-    _add_colored_heading(doc, "3. Requirements & Constraints (Extracted)", 1, primary_hex)
+    # 4 Requirements
+    _add_colored_heading(doc, "4. Requirements & Constraints (Extracted)", 1, primary_hex)
     reqs = report.get("requirements", {})
     if reqs:
         for cat, items in reqs.items():
@@ -145,15 +168,15 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
     else:
         doc.add_paragraph("No structured requirements extracted.", style="List Bullet")
 
-    # 4 Deliverables
-    _add_colored_heading(doc, "4. Deliverables to Prepare (Pre-Bid)", 1, primary_hex)
+    # 5 Deliverables
+    _add_colored_heading(doc, "5. Deliverables to Prepare (Pre-Bid)", 1, primary_hex)
     for item in report.get("deliverables", []):
         doc.add_paragraph(str(item), style="List Bullet")
 
-    # 4b Showstoppers
+    # 5b Showstoppers
     showstoppers = report.get("showstoppers", [])
     if showstoppers:
-        _add_colored_heading(doc, "4b. Showstoppers — Immediate NO-GO Flags", 1, accent_hex)
+        _add_colored_heading(doc, "5b. Showstoppers — Immediate NO-GO Flags", 1, accent_hex)
         table = doc.add_table(rows=1, cols=4)
         hdr = table.rows[0].cells
         for i, h in enumerate(["ID", "Description", "Document Reference", "Impact"]):
@@ -168,8 +191,8 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
             _set_cell_text(row[2], str(ss.get("document_ref", ss.get("evidence", ""))))
             _set_cell_text(row[3], str(ss.get("impact", "")))
 
-    # 5 Risks
-    _add_colored_heading(doc, "5. Risk Register", 1, primary_hex)
+    # 6 Risks
+    _add_colored_heading(doc, "6. Risk Register", 1, primary_hex)
     risks = report.get("risks", [])
     if risks:
         table = doc.add_table(rows=1, cols=6)
@@ -194,8 +217,8 @@ def build_docx(report: Dict[str, Any], primary_hex: str, accent_hex: str) -> byt
     else:
         doc.add_paragraph("No major risks identified.", style="List Bullet")
 
-    # 6 Go/No-Go
-    _add_colored_heading(doc, "6. Go / No-Go Recommendation", 1, primary_hex)
+    # 7 Go/No-Go
+    _add_colored_heading(doc, "7. Go / No-Go Recommendation", 1, primary_hex)
     gn = report.get("go_nogo", {})
     if not isinstance(gn, dict):
         gn = {}
