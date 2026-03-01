@@ -1586,6 +1586,7 @@ def _portfolio_insights(lib: list):
                 key="portfolio_map",
                 config={"displayModeBar": False},
             )
+            st.write(f"Figure height: {fig.layout.height}")
 
             sel_points = (
                 event.selection.get("points", [])
