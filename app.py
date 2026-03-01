@@ -974,12 +974,12 @@ a.feat-link:hover .feat-card {{
 }}
 [data-testid="stPlotlyChart"] {{
     flex: none !important;
-    height: 300px !important;
-    min-height: 300px !important;
+    height: 500px !important;
+    min-height: 500px !important;
 }}
 [data-testid="stPlotlyChart"] iframe {{
-    height: 300px !important;
-    min-height: 300px !important;
+    height: 500px !important;
+    min-height: 500px !important;
 }}
 </style>
 """, unsafe_allow_html=True)
