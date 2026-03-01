@@ -974,12 +974,12 @@ a.feat-link:hover .feat-card {{
 }}
 [data-testid="stPlotlyChart"] {{
     flex: none !important;
-    height: 500px !important;
-    min-height: 500px !important;
+    height: 800px !important;
+    min-height: 800px !important;
 }}
 [data-testid="stPlotlyChart"] iframe {{
-    height: 500px !important;
-    min-height: 500px !important;
+    height: 800px !important;
+    min-height: 800px !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -1303,6 +1303,7 @@ def _portfolio_insights(lib: list):
     """Render the Portfolio Risk Insights panel from all stored reports."""
     from collections import Counter
     import plotly.express as px
+    import plotly.graph_objects as go
 
     entries_with_report = [e for e in lib if e.get("report")]
     if not entries_with_report:
@@ -1533,6 +1534,9 @@ def _portfolio_insights(lib: list):
       <div class="insights-title">📊 Portfolio Risk Insights</div>
     """, unsafe_allow_html=True)
 
+    if "map_selected_iso3" not in st.session_state:
+        st.session_state["map_selected_iso3"] = set()
+
     selected_names: list = []
     cols = st.columns([3, 2])
 
@@ -1542,8 +1546,12 @@ def _portfolio_insights(lib: list):
         if map_rows:
             df_map = pd.DataFrame(map_rows)
 
+            _sel_iso3 = st.session_state["map_selected_iso3"]
+            df_unsel = df_map[~df_map["iso3"].isin(_sel_iso3)]
+            df_sel   = df_map[df_map["iso3"].isin(_sel_iso3)]
+
             fig = px.choropleth(
-                df_map,
+                df_unsel,
                 locations="iso3",
                 color="count",
                 hover_name="country",
@@ -1554,6 +1562,19 @@ def _portfolio_insights(lib: list):
                 ],
                 labels={"count": "Tenders"},
             )
+
+            if not df_sel.empty:
+                fig.add_trace(go.Choropleth(
+                    locations=df_sel["iso3"],
+                    z=[1] * len(df_sel),
+                    colorscale=[[0, "#FF6B00"], [1, "#FF6B00"]],
+                    showscale=False,
+                    hovertext=df_sel["country"],
+                    hovertemplate="%{hovertext}<extra></extra>",
+                    marker_line_color="rgba(255,255,255,0.5)",
+                    marker_line_width=1.0,
+                ))
+
             fig.update_layout(
                 geo=dict(
                     bgcolor="rgba(0,0,0,0)",
@@ -1576,7 +1597,7 @@ def _portfolio_insights(lib: list):
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0, r=0, t=0, b=0),
                 coloraxis_showscale=False,
-                height=300,
+                height=800,
                 autosize=True,
                 uirevision="constant",
                 dragmode=False,
@@ -1595,16 +1616,23 @@ def _portfolio_insights(lib: list):
                 key="portfolio_map",
                 config={"displayModeBar": False},
             )
-            st.write(f"Figure height: {fig.layout.height}")
-
             sel_points = (
                 event.selection.get("points", [])
                 if event and hasattr(event, "selection") and event.selection
                 else []
             )
-            selected_iso3 = [p.get("location", "") for p in sel_points if p.get("location")]
+            clicked_iso3 = {p.get("location", "") for p in sel_points if p.get("location")}
+            # Toggle: clicking the same selection again clears it
+            if clicked_iso3 and clicked_iso3 == st.session_state["map_selected_iso3"]:
+                st.session_state["map_selected_iso3"] = set()
+            elif clicked_iso3:
+                st.session_state["map_selected_iso3"] = clicked_iso3
+            elif not sel_points:
+                st.session_state["map_selected_iso3"] = set()
+
             selected_names = [
-                _ISO3_TO_NAME.get(iso, iso) for iso in selected_iso3
+                _ISO3_TO_NAME.get(iso, iso)
+                for iso in st.session_state["map_selected_iso3"]
                 if _ISO3_TO_NAME.get(iso) in countries_entries
             ]
 
