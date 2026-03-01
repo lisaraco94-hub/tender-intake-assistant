@@ -972,6 +972,15 @@ a.feat-link:hover .feat-card {{
     background: rgba(255,255,255,0.18) !important;
     border-color: rgba(255,255,255,0.5) !important;
 }}
+[data-testid="stPlotlyChart"] {{
+    flex: none !important;
+    height: 500px !important;
+    min-height: 500px !important;
+}}
+[data-testid="stPlotlyChart"] iframe {{
+    height: 500px !important;
+    min-height: 500px !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1586,6 +1595,7 @@ def _portfolio_insights(lib: list):
                 key="portfolio_map",
                 config={"displayModeBar": False},
             )
+            st.write(f"Figure height: {fig.layout.height}")
 
             sel_points = (
                 event.selection.get("points", [])
