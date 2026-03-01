@@ -1108,6 +1108,27 @@ def view_analyze():
             "High":   "~4–8 min · full analysis",
         }[detail])
 
+        st.markdown(
+            '<div style="margin-top:0.7rem;font-size:0.78rem;color:rgba(255,255,255,0.75);'
+            'font-weight:600;margin-bottom:0.15rem;">Consensus runs</div>',
+            unsafe_allow_html=True,
+        )
+        consensus_runs = st.radio(
+            "consensus_runs_sel",
+            options=[1, 2, 3],
+            format_func=lambda x: {1: "1× Fast", 2: "2× Balanced", 3: "3× Consensus"}[x],
+            index=st.session_state.get("consensus_runs", 1) - 1,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="consensus_runs_radio",
+        )
+        st.session_state.consensus_runs = consensus_runs
+        st.caption({
+            1: "Single pass",
+            2: "2 independent runs merged",
+            3: "3 independent runs merged — most stable",
+        }[consensus_runs])
+
     # Sidebar (still available for advanced users)
     with st.sidebar:
         st.markdown("### ⚙️ Settings")
@@ -1199,33 +1220,28 @@ def view_analyze():
                 if os.path.exists(folder)
                 for fn in os.listdir(folder)
             ])
+            runs = st.session_state.get("consensus_runs", 1)
             spinner_msg = (
                 f"Analysing {len(uploaded_files)} file(s) with GPT-4o [{detail}]"
-                + (f" · {n_kb} past bid doc(s) loaded" if n_kb else "")
+                + (f" · {n_kb} KB doc(s) in KB" if n_kb else "")
+                + (f" · {runs}× consensus" if runs > 1 else "")
                 + "…"
             )
             with st.spinner(spinner_msg):
                 try:
                     _sig = inspect.signature(build_prebid_report)
+                    _kw: dict = dict(
+                        risk_factors=risk_factors,
+                        detail=detail,
+                    )
                     if "knowledge_context" in _sig.parameters:
-                        report = build_prebid_report(
-                            all_pages,
-                            risk_factors=risk_factors,
-                            detail=detail,
-                            knowledge_context=knowledge_ctx,
-                        )
-                    else:
-                        # Older pipeline.py without knowledge_context param —
-                        # prepend context as the first page so it's still analysed.
-                        pages_with_ctx = (
-                            [f"=== COMPANY KNOWLEDGE BASE ===\n{knowledge_ctx}"] + all_pages
-                            if knowledge_ctx else all_pages
-                        )
-                        report = build_prebid_report(
-                            pages_with_ctx,
-                            risk_factors=risk_factors,
-                            detail=detail,
-                        )
+                        _kw["knowledge_context"] = knowledge_ctx
+                    if "runs" in _sig.parameters:
+                        _kw["runs"] = runs
+                    if "knowledge_context" not in _sig.parameters and knowledge_ctx:
+                        # Legacy pipeline without knowledge_context param — prepend as page
+                        all_pages = [f"=== COMPANY KNOWLEDGE BASE ===\n{knowledge_ctx}"] + all_pages
+                    report = build_prebid_report(all_pages, **_kw)
                     st.session_state.report = report
                     st.session_state.run_done = True
 
@@ -2182,6 +2198,8 @@ def _render_report(report: dict):
         if meta:
             with st.expander("API usage"):
                 st.caption(f"Model: {meta.get('model','gpt-4o')}")
+                if meta.get("runs", 1) > 1:
+                    st.caption(f"Runs: {meta['runs']}× consensus merge")
                 st.caption(f"Tokens: {meta.get('total_tokens',0):,}")
                 st.caption(f"Cost: ${meta.get('estimated_cost_usd',0):.4f}")
                 st.caption(f"Sections: {meta.get('pages_analyzed',0)}")
