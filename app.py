@@ -1290,6 +1290,22 @@ def view_analyze():
 
 # ─── LIBRARY helpers ──────────────────────────────────────────────
 
+@st.cache_data(show_spinner=False)
+def _load_world_geojson():
+    import requests
+    resp = requests.get(
+        "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",
+        timeout=15,
+    )
+    resp.raise_for_status()
+    raw = resp.json()
+    # Strip all properties except the ISO code to minimise payload size
+    for feat in raw["features"]:
+        iso = feat["properties"].get("ISO3166-1-Alpha-3", "")
+        feat["properties"] = {"ISO3166-1-Alpha-3": iso}
+    return raw
+
+
 def _portfolio_insights(lib: list):
     """Render the Portfolio Risk Insights panel from all stored reports."""
     from collections import Counter
@@ -1539,63 +1555,68 @@ def _portfolio_insights(lib: list):
             tender_iso3 = {row["iso3"] for row in map_rows}
             _sel = st.session_state["map_selected_iso3"]
 
-            @st.cache_data(show_spinner=False)
-            def _load_world_geojson():
-                import requests
-                resp = requests.get(
-                    "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",
-                    timeout=15,
+            # ── Build the Folium map only when tender_iso3 or selection changes.
+            # Reusing the same Python object across reruns keeps the UUIDs stable
+            # so st_folium does NOT reload the iframe on unrelated interactions
+            # (e.g. typing in the search box), eliminating the "blue patina".
+            _map_cache_key = (frozenset(tender_iso3), frozenset(_sel))
+            if st.session_state.get("_map_cache_key") != _map_cache_key:
+                try:
+                    world_geo = _load_world_geojson()
+                except Exception:
+                    world_geo = None
+
+                if world_geo:
+                    def _style(feature):
+                        iso3 = feature["properties"].get("ISO3166-1-Alpha-3", "")
+                        if iso3 in _sel:
+                            return {"fillColor": "#FF6B00", "color": "white",
+                                    "weight": 0.5, "fillOpacity": 0.85, "opacity": 0.2}
+                        if iso3 in tender_iso3:
+                            return {"fillColor": "#1E6091", "color": "white",
+                                    "weight": 0.5, "fillOpacity": 0.85, "opacity": 0.2}
+                        return {"fillColor": "#4A4A4A", "color": "white",
+                                "weight": 0.5, "fillOpacity": 0.60, "opacity": 0.2}
+
+                    def _highlight(feature):
+                        if feature["properties"].get("ISO3166-1-Alpha-3", "") in tender_iso3:
+                            return {"fillOpacity": 1.0, "weight": 1.0, "opacity": 0.5}
+                        return {}
+
+                    m = folium.Map(
+                        location=[20, 0],
+                        zoom_start=2,
+                        tiles=None,
+                        zoom_control=False,
+                        scrollWheelZoom=False,
+                        dragging=False,
+                        doubleClickZoom=False,
+                        attributionControl=False,
+                    )
+                    m.get_root().html.add_child(folium.Element(
+                        '<style>.leaflet-container { background: #00142E !important; }</style>'
+                    ))
+                    folium.GeoJson(
+                        world_geo,
+                        style_function=_style,
+                        highlight_function=_highlight,
+                        tooltip=folium.GeoJsonTooltip(
+                            fields=["ISO3166-1-Alpha-3"],
+                            labels=False,
+                            sticky=False,
+                        ),
+                    ).add_to(m)
+                    st.session_state["_map_obj"] = m
+                else:
+                    st.session_state["_map_obj"] = None
+                st.session_state["_map_cache_key"] = _map_cache_key
+
+            m = st.session_state.get("_map_obj")
+            if m:
+                map_data = st_folium(
+                    m, width="100%", height=400, key="portfolio_map",
+                    returned_objects=["last_object_clicked_tooltip", "last_clicked"],
                 )
-                resp.raise_for_status()
-                return resp.json()
-
-            def _style(feature):
-                iso3 = feature["properties"].get("ISO3166-1-Alpha-3", "")
-                if iso3 in _sel:
-                    return {"fillColor": "#FF6B00", "color": "white",
-                            "weight": 0.5, "fillOpacity": 0.85, "opacity": 0.2}
-                if iso3 in tender_iso3:
-                    return {"fillColor": "#1E6091", "color": "white",
-                            "weight": 0.5, "fillOpacity": 0.85, "opacity": 0.2}
-                return {"fillColor": "#4A4A4A", "color": "white",
-                        "weight": 0.5, "fillOpacity": 0.60, "opacity": 0.2}
-
-            def _highlight(feature):
-                if feature["properties"].get("ISO3166-1-Alpha-3", "") in tender_iso3:
-                    return {"fillOpacity": 1.0, "weight": 1.0, "opacity": 0.5}
-                return {}
-
-            try:
-                world_geo = _load_world_geojson()
-            except Exception:
-                world_geo = None
-
-            if world_geo:
-                m = folium.Map(
-                    location=[20, 0],
-                    zoom_start=2,
-                    tiles=None,
-                    zoom_control=False,
-                    scrollWheelZoom=False,
-                    dragging=False,
-                    doubleClickZoom=False,
-                    attributionControl=False,
-                )
-                m.get_root().html.add_child(folium.Element(
-                    '<style>.leaflet-container { background: #00142E !important; }</style>'
-                ))
-                folium.GeoJson(
-                    world_geo,
-                    style_function=_style,
-                    highlight_function=_highlight,
-                    tooltip=folium.GeoJsonTooltip(
-                        fields=["ISO3166-1-Alpha-3"],
-                        labels=False,
-                        sticky=False,
-                    ),
-                ).add_to(m)
-
-                map_data = st_folium(m, width="100%", height=400, key="portfolio_map")
 
                 raw_tip = (map_data or {}).get("last_object_clicked_tooltip") or ""
                 clicked_iso3 = re.sub(r"<[^>]+>", "", raw_tip).strip()
@@ -1604,15 +1625,17 @@ def _portfolio_insights(lib: list):
                 prev_clicked = st.session_state.get("_map_last_clicked")
                 if last_clicked != prev_clicked:
                     st.session_state["_map_last_clicked"] = last_clicked
-                    if not clicked_iso3:
-                        st.session_state["map_selected_iso3"] = set()
-                    elif clicked_iso3 in tender_iso3:
+                    if clicked_iso3 in tender_iso3:
+                        # Toggle the clicked country (add if absent, remove if present)
                         sel = set(st.session_state["map_selected_iso3"])
                         if clicked_iso3 in sel:
                             sel.discard(clicked_iso3)
                         else:
                             sel.add(clicked_iso3)
                         st.session_state["map_selected_iso3"] = sel
+                    else:
+                        # Ocean or grey country (no tender) → clear all
+                        st.session_state["map_selected_iso3"] = set()
 
             selected_names = [
                 _ISO3_TO_NAME.get(iso, iso)
@@ -1624,7 +1647,7 @@ def _portfolio_insights(lib: list):
                 st.markdown(
                     f'<p style="font-size:0.72rem;color:rgba(255,255,255,0.75);margin-top:0.3rem;">'
                     f'Filtro attivo: {", ".join(selected_names)}'
-                    f' &nbsp;—&nbsp; <em>clicca fuori dalla selezione per resettare</em></p>',
+                    f' &nbsp;—&nbsp; <em>clicca su un paese grigio o sull\'oceano per resettare</em></p>',
                     unsafe_allow_html=True,
                 )
             else:
@@ -1771,11 +1794,9 @@ def view_library():
 
     st.caption(f"{len(filtered)} result(s)")
 
-    lib_full = load_library()  # reload for delete operations
-
     for idx, entry in enumerate(filtered):
         real_idx = next(
-            (i for i, e in enumerate(lib_full) if e.get("date") == entry.get("date")
+            (i for i, e in enumerate(lib) if e.get("date") == entry.get("date")
              and e.get("display_title") == entry.get("display_title")),
             None,
         )
