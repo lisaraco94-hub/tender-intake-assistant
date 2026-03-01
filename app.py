@@ -1625,15 +1625,17 @@ def _portfolio_insights(lib: list):
                 prev_clicked = st.session_state.get("_map_last_clicked")
                 if last_clicked != prev_clicked:
                     st.session_state["_map_last_clicked"] = last_clicked
-                    if not clicked_iso3:
-                        st.session_state["map_selected_iso3"] = set()
-                    elif clicked_iso3 in tender_iso3:
+                    if clicked_iso3 in tender_iso3:
+                        # Toggle the clicked country (add if absent, remove if present)
                         sel = set(st.session_state["map_selected_iso3"])
                         if clicked_iso3 in sel:
                             sel.discard(clicked_iso3)
                         else:
                             sel.add(clicked_iso3)
                         st.session_state["map_selected_iso3"] = sel
+                    else:
+                        # Ocean or grey country (no tender) → clear all
+                        st.session_state["map_selected_iso3"] = set()
 
             selected_names = [
                 _ISO3_TO_NAME.get(iso, iso)
@@ -1645,7 +1647,7 @@ def _portfolio_insights(lib: list):
                 st.markdown(
                     f'<p style="font-size:0.72rem;color:rgba(255,255,255,0.75);margin-top:0.3rem;">'
                     f'Filtro attivo: {", ".join(selected_names)}'
-                    f' &nbsp;—&nbsp; <em>clicca fuori dalla selezione per resettare</em></p>',
+                    f' &nbsp;—&nbsp; <em>clicca su un paese grigio o sull\'oceano per resettare</em></p>',
                     unsafe_allow_html=True,
                 )
             else:
