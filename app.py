@@ -1520,10 +1520,10 @@ def _portfolio_insights(lib: list):
         st.session_state["map_selected_iso3"] = set()
 
     selected_names: list = []
-    cols = st.columns([3, 2])
+    cols = st.columns([1, 4])
 
     with cols[0]:
-        st.markdown("**Filtra per paese**")
+        st.markdown("**Filter by country**")
 
         if countries_entries:
             country_options = sorted(
@@ -1531,10 +1531,10 @@ def _portfolio_insights(lib: list):
                 key=lambda c: -len(countries_entries[c]),
             )
             chosen_names = st.multiselect(
-                label="paese",
+                label="country",
                 options=country_options,
                 format_func=lambda c: f"{c}  ×{len(countries_entries[c])}",
-                placeholder="Tutti i paesi (nessun filtro)",
+                placeholder="All countries (no filter)",
                 label_visibility="collapsed",
             )
             st.session_state["map_selected_iso3"] = {
@@ -1579,13 +1579,13 @@ def _portfolio_insights(lib: list):
                 st.markdown(tags_html, unsafe_allow_html=True)
             st.markdown(
                 '<p style="font-size:0.68rem;color:rgba(255,255,255,0.4);margin-top:0.8rem;">'
-                'Tag arancioni = presenti in 2+ tender.</p>',
+                'Orange tags = appear in 2+ tenders.</p>',
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
                 '<p style="font-size:0.72rem;color:rgba(255,255,255,0.45);">'
-                'Nessun dato specifico trovato per la selezione.</p>',
+                'No specific data found for this selection.</p>',
                 unsafe_allow_html=True,
             )
 
