@@ -1463,7 +1463,6 @@ def _portfolio_insights(lib: list):
         "Uzbekistan": "UZB", "Venezuela": "VEN", "Vietnam": "VNM",
         "Yemen": "YEM", "Zimbabwe": "ZWE",
     }
-    _ISO3_TO_NAME = {v: k for k, v in _ISO3.items()}
 
     # ── Collect per-entry data ──
     countries_entries: dict = {}
@@ -1511,13 +1510,6 @@ def _portfolio_insights(lib: list):
     if not (countries_entries or any([cert_all, anlzr_all, lis_all, spec_all, infra_all])):
         return
 
-    # ── Build choropleth data ──
-    map_rows = []
-    for country, entries in countries_entries.items():
-        iso3 = _ISO3.get(country, "")
-        if iso3:
-            map_rows.append({"country": country, "iso3": iso3, "count": len(entries)})
-
     # ── Render ──
     st.markdown("""
     <div class="insights-panel">
@@ -1531,118 +1523,25 @@ def _portfolio_insights(lib: list):
     cols = st.columns([3, 2])
 
     with cols[0]:
-        st.markdown("**Tenders by country** — click to filter tags")
+        st.markdown("**Filtra per paese**")
 
-        if map_rows:
-            import plotly.graph_objects as go
-
-            tender_iso3 = {row["iso3"] for row in map_rows}
-            _sel = st.session_state.get("map_selected_iso3", set())
-
-            blue_iso = sorted(tender_iso3 - _sel)
-            orange_iso = sorted(_sel & tender_iso3)
-
-            fig = go.Figure()
-            if blue_iso:
-                fig.add_trace(go.Choropleth(
-                    locations=blue_iso,
-                    z=[1] * len(blue_iso),
-                    locationmode="ISO-3",
-                    colorscale=[[0, "#1E6091"], [1, "#1E6091"]],
-                    showscale=False,
-                    marker_line_color="rgba(255,255,255,0.3)",
-                    marker_line_width=0.5,
-                    hovertemplate="%{location}<extra></extra>",
-                    name="Tender",
-                ))
-            if orange_iso:
-                fig.add_trace(go.Choropleth(
-                    locations=orange_iso,
-                    z=[1] * len(orange_iso),
-                    locationmode="ISO-3",
-                    colorscale=[[0, "#FF6B00"], [1, "#FF6B00"]],
-                    showscale=False,
-                    marker_line_color="rgba(255,255,255,0.5)",
-                    marker_line_width=0.8,
-                    hovertemplate="%{location} ✓<extra></extra>",
-                    name="Selezionato",
-                ))
-            fig.update_geos(
-                showframe=False,
-                showcoastlines=False,
-                bgcolor="#00142E",
-                landcolor="#3A3A3A",
-                oceancolor="#00142E",
-                showocean=True,
-                showlakes=False,
-                projection_type="natural earth",
-                showrivers=False,
-                showcountries=False,
-                # Clip polar whitespace so countries are large enough to click
-                lataxis_range=[-55, 75],
-                lonaxis_range=[-160, 175],
+        if countries_entries:
+            country_options = sorted(
+                countries_entries.keys(),
+                key=lambda c: -len(countries_entries[c]),
             )
-            fig.update_layout(
-                paper_bgcolor="#00142E",
-                plot_bgcolor="#00142E",
-                margin=dict(l=0, r=0, t=0, b=0),
-                height=360,
-                showlegend=False,
-                # Preserve zoom/pan state across reruns (prevents reset on selection)
-                uirevision="world-map",
+            chosen_names = st.multiselect(
+                label="paese",
+                options=country_options,
+                format_func=lambda c: f"{c}  ×{len(countries_entries[c])}",
+                placeholder="Tutti i paesi (nessun filtro)",
+                label_visibility="collapsed",
             )
-
-            event = st.plotly_chart(
-                fig,
-                use_container_width=True,
-                on_select="rerun",
-                selection_mode="points",
-                key="portfolio_map_plotly",
-            )
-
-            if event and event.selection and event.selection.points:
-                pt = event.selection.points[0]
-                clicked_iso = pt.get("location")
-                if clicked_iso and clicked_iso in tender_iso3:
-                    sel = set(st.session_state.get("map_selected_iso3", set()))
-                    if clicked_iso in sel:
-                        sel.discard(clicked_iso)
-                    else:
-                        sel.add(clicked_iso)
-                    st.session_state["map_selected_iso3"] = sel
-                    st.rerun()
-
-            if _sel & tender_iso3:
-                if st.button("✕ Deseleziona tutto", key="map_clear_sel"):
-                    st.session_state["map_selected_iso3"] = set()
-                    st.rerun()
-
-            selected_names = [
-                _ISO3_TO_NAME.get(iso, iso)
-                for iso in st.session_state.get("map_selected_iso3", set())
-                if _ISO3_TO_NAME.get(iso) in countries_entries
-            ]
-
-            if selected_names:
-                st.markdown(
-                    f'<p style="font-size:0.72rem;color:rgba(255,255,255,0.75);margin-top:0.3rem;">'
-                    f'Filtro attivo: {", ".join(selected_names)}</p>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    '<p style="font-size:0.72rem;color:rgba(255,255,255,0.45);margin-top:0.3rem;">'
-                    'Nessun paese selezionato — visualizzati tutti i tender</p>',
-                    unsafe_allow_html=True,
-                )
-        else:
-            # Fallback: no ISO3 match — plain list
-            for country, entries in sorted(countries_entries.items(), key=lambda x: -len(x[1])):
-                cnt = len(entries)
-                st.markdown(
-                    f"- {country} &nbsp;<span style='color:#7dd3fc;font-size:0.78rem;'>×{cnt}</span>",
-                    unsafe_allow_html=True,
-                )
+            st.session_state["map_selected_iso3"] = {
+                iso for name in chosen_names
+                if (iso := _ISO3.get(name, ""))
+            }
+            selected_names = list(chosen_names)
 
     with cols[1]:
         # Filter by country selection; default = all
